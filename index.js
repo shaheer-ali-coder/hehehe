@@ -162,10 +162,10 @@ bot.on('callback_query', (callbackQuery) => {
               };
             
             bot.sendMessage(chatId, `
-            Get 15% from people who buy from your referral link\n🤑Paying out on mondays\nYour referral links:\nETH bot: https://t.me/Whale_finders_PRO_bot?${userName}\nSOL bot: https://t.me/Whale_finders_on_solana_bot?start=NjE5MzE3MjE1NA==\nShare it with your audience.\n\nPeople used link: 0\nBuys: 0\nYour referral balance: 0.0$\nAlready claimed money: 0$\nWhen person uses your link we automatically save his id under your reflink as soon as user pays using bot or through manager you get balance added.\nWrite @Whale_finders to get personal assistance
+            Get 15% from people who buy from your referral link\n🤑Paying out on mondays\nYour referral links:\nETH bot: https://t.me/whale_pay_bot?${userName}\nSOL bot: https://t.me/@whale_pay_bot?${userName}\nShare it with your audience.\n\nPeople used link: 0\nBuys: 0\nYour referral balance: 0.0$\nAlready claimed money: 0$\nWhen person uses your link we automatically save his id under your reflink as soon as user pays using bot or through manager you get balance added.\nWrite @Whale_finders to get personal assistance
             `,{parse_mode:"HTML",...keyboard_1});
             let data_ammend = {
-              'link': `https://t.me/Whale_finders_PRO_bot?${userName}`,
+              'link': `https://t.me/whale_pay_bot?${userName}`,
               'money':`0`
             }
             amendJsonFile('./data.json',userName , data_ammend)
@@ -175,7 +175,7 @@ bot.on('callback_query', (callbackQuery) => {
             bot.sendMessage(chatId,"You don't have money to claim yet")
         case 'pro':
             bot.sendMessage(chatId, `
-            🌟In PRO version:🌟\n1️⃣ We drop ~200 profitable wallets a day to private group\n2️⃣ No such limits on wallet checks.\n3️⃣Get files of wallets from checked tokens(in group)\nEach file have all wallets which were trading with next data: wallet,amount of buys, amount of sells, buy sum, sell sum, xmade(sell sum/buy sum)\n💰Cost is just $59 a month\n(Auto paybot) @Whale_finders_paybot\n(Manager 6am-6pm GMT) @Whale_finders
+            🌟In PRO version:🌟\n1️⃣ We drop ~200 profitable wallets a day to private group\n2️⃣ No such limits on wallet checks.\n3️⃣Get files of wallets from checked tokens(in group)\nEach file have all wallets which were trading with next data: wallet,amount of buys, amount of sells, buy sum, sell sum, xmade(sell sum/buy sum)\n💰Cost is just $59 a month\n(Auto paybot) @whale_pay_bot\n(Manager 6am-6pm GMT) @zimmaman
             `);
             break;
     }
