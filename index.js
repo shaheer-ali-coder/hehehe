@@ -1,12 +1,21 @@
 const TelegramBot = require('node-telegram-bot-api');
 const fs = require('fs')
-
+const path = require('path')
 // Replace 'YOUR_TELEGRAM_BOT_TOKEN' with your actual bot token
 const token = '7019611296:AAH_cmh9orp3Ev3xFlGdRPT7QqW5HwoG9Xc';
 
 // Create a bot instance
 const bot = new TelegramBot(token, { polling: true });
+function generateReferralCode(length = 6) {
+  const characters = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789';
+  let referralCode = '';
 
+  for (let i = 0; i < length; i++) {
+      referralCode += characters.charAt(Math.floor(Math.random() * characters.length));
+  }
+
+  return referralCode;
+}
 async function fetchWalletStats(walletAddress) {
   try {
       // Fetch recent transactions for the wallet
@@ -149,28 +158,73 @@ bot.on('callback_query', (callbackQuery) => {
             🤖To get wallet stats for 10 days type:\n/check Wallet\n🆓Free version is limited to 3 checks a day. To use it you need to be subscribed to @Whale_finders_blog_eng.\n🌟To get unlimited checks and lists of wallets from contract checks get PRO\n(Auto paybot) @Whale_finders_paybot\n(Manager 6am-6pm GMT) @Whale_finders`
             bot.sendMessage(chatId, message);
             break;
-        case 'refferal':
-            const keyboard_1 = {
-                reply_markup: {
-                  inline_keyboard: [
-                    [
-                      { text: 'Claim Money', callback_data: 'claim' },
-                    ],
-                    
-                  ],
-                },
-              };
+            case 'refferal':
+    console.log("referrals clicked");
+    const keyboard_1 = {
+        reply_markup: {
+            inline_keyboard: [
+                [
+                    { text: 'Claim Money', callback_data: 'claim' },
+                ],
+            ],
+        },
+    };
+
+    const filePath___ = path.join(__dirname, './data.json');
+    console.log("reading file...");
+    fs.readFile(filePath___, 'utf8', (err, data) => {
+        console.log("file read!");
+        if (err) {
+            console.error('Error reading file:', err);
+            return;
+        }
+
+        try {
+            let jsonData = JSON.parse(data);
             
-            bot.sendMessage(chatId, `
-            Get 15% from people who buy from your referral link\n🤑Paying out on mondays\nYour referral links:\nETH bot: https://t.me/whale_pay_bot?${userName}\nSOL bot: https://t.me/@whale_pay_bot?${userName}\nShare it with your audience.\n\nPeople used link: 0\nBuys: 0\nYour referral balance: 0.0$\nAlready claimed money: 0$\nWhen person uses your link we automatically save his id under your reflink as soon as user pays using bot or through manager you get balance added.\nWrite @Whale_finders to get personal assistance
-            `,{parse_mode:"HTML",...keyboard_1});
-            let data_ammend = {
-              'link': `https://t.me/whale_pay_bot?${userName}`,
-              'money':`0`
+            // Find user entry
+            const userEntry = jsonData[userName];
+            
+            if (userEntry) {
+                console.log("user found");
+                const code = Object.keys(userEntry)[0]; // Extract referral code
+                console.log(`User with username '${userName}' exists.`);
+                bot.sendMessage(chatId, `
+                Get 15% from people who buy from your referral code\n🤑Paying out on mondays\nYour referral code:${code}\nShare it with your audience.\n\nPeople used link: ${userEntry[code].buys}\nYour referral balance: ${userEntry[code].money}$\nWhen a person uses your link, we automatically save their ID under your reflink. As soon as the user pays using the bot or through the manager, you get the balance added.
+                `, { parse_mode: "HTML", ...keyboard_1 });
+
+            } else {
+                console.log("user not found , generating code!");
+                const code = generateReferralCode();
+                console.log(`User with username '${userName}' does not exist.`);
+                bot.sendMessage(chatId, `
+                Get 15% from people who buy from your referral code\n🤑Paying out on mondays\nYour referral code:${code}\nShare it with your audience.\n\nPeople used link: 0\nBuys: 0\nYour referral balance: 0.0$\nAlready claimed money: 0$\nWhen a person uses your link, we automatically save their ID under your reflink. As soon as the user pays using the bot or through the manager, you get the balance added.\nWrite @Whale_finders to get personal assistance
+                `, { parse_mode: "HTML", ...keyboard_1 });
+
+                // Update data with new user entry
+                jsonData[userName] = {
+                    [code]: {
+                        'username': userName,
+                        'money': 0,
+                        'buys': 0,
+                        'code': code
+                    }
+                };
+                fs.writeFile(filePath___, JSON.stringify(jsonData), (err) => {
+                    if (err) {
+                        console.error('Error writing to file:', err);
+                        return;
+                    }
+                    console.log('Data written to file.');
+                });
             }
-            amendJsonFile('./data.json',userName , data_ammend)
-            
-            break;
+        } catch (error) {
+            console.error('Error parsing JSON:', error);
+        }
+    });
+
+    break;
+
         case 'claim':
             bot.sendMessage(chatId,"You don't have money to claim yet")
         case 'pro':
