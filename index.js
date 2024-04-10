@@ -155,7 +155,7 @@ bot.on('callback_query', (callbackQuery) => {
             break;
         case 'check':
             const message = `
-            🤖To get wallet stats for 10 days type:\n/check Wallet\n🆓Free version is limited to 3 checks a day. To use it you need to be subscribed to @Whale_finders_blog_eng.\n🌟To get unlimited checks and lists of wallets from contract checks get PRO\n(Auto paybot) @Whale_finders_paybot\n(Manager 6am-6pm GMT) @Whale_finders`
+            🤖To get wallet stats for 10 days type:\n/check Wallet\n🆓Free version is limited to 3 checks a day. To use it you need to be subscribed to @Whale_finders_blog_eng.\n🌟To get unlimited checks and lists of wallets from contract checks get PRO\n(Auto paybot) @Whale_pay_bot\n(Manager 6am-6pm GMT) @zimmaman`
             bot.sendMessage(chatId, message);
             break;
             case 'refferal':
@@ -198,7 +198,7 @@ bot.on('callback_query', (callbackQuery) => {
                 const code = generateReferralCode();
                 console.log(`User with username '${userName}' does not exist.`);
                 bot.sendMessage(chatId, `
-                Get 15% from people who buy from your referral code\n🤑Paying out on mondays\nYour referral code:${code}\nShare it with your audience.\n\nPeople used link: 0\nBuys: 0\nYour referral balance: 0.0$\nAlready claimed money: 0$\nWhen a person uses your link, we automatically save their ID under your reflink. As soon as the user pays using the bot or through the manager, you get the balance added.\nWrite @Whale_finders to get personal assistance
+                Get 15% from people who buy from your referral code\n🤑Paying out on mondays\nYour referral code:${code}\nShare it with your audience.\n\nPeople used link: 0\nBuys: 0\nYour referral balance: 0.0$\nAlready claimed money: 0$\nWhen a person uses your link, we automatically save their ID under your reflink. As soon as the user pays using the bot or through the manager, you get the balance added.\nWrite @zimmaman to get personal assistance
                 `, { parse_mode: "HTML", ...keyboard_1 });
 
                 // Update data with new user entry
