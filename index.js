@@ -1,236 +1,1732 @@
-const TelegramBot = require('node-telegram-bot-api');
-const fs = require('fs')
-const path = require('path')
-// Replace 'YOUR_TELEGRAM_BOT_TOKEN' with your actual bot token
-const token = '7019611296:AAH_cmh9orp3Ev3xFlGdRPT7QqW5HwoG9Xc';
+const TelegramBot = require("node-telegram-bot-api");
+const {
+  Keypair,
+  Connection,
+  Transaction,
+  SystemProgram,
+  PublicKey,
+} = require("@solana/web3.js");
+const {
+  Connection,
+  PublicKey,
+  Transaction,
+  SystemProgram,
+  sendAndConfirmTransaction,
+} = require("@solana/web3.js");
+const messages = {}; // Object to store message data
+const filePath = "./data.json";
+const fs = require("fs");
+// const { Keypair } = require("@solana/web3.js");
+// const { Connection, PublicKey } = require("@solana/web3.js");
+let copyTrading = [];
+// Todo
+// 7. In 'referral' callback code to check for balance for referral
+// 8. Buttons for 'setting' callback
+// 9. 'bridge' callback
+// 10. 'solana' callback addition of buttons
+// 11. 'ethereum' callback addtion of buttons
+// 12. 'refresh' callback should be coded to refresh the message
+// 13. Implement buyToken()
+// 14. Implement 'add_copytrade'
+// 15 . Implement sellTrade() , getDCA() , getLimitOrder(), getPosition()
 
-// Create a bot instance
-const bot = new TelegramBot(token, { polling: true });
-function generateReferralCode(length = 6) {
-  const characters = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789';
-  let referralCode = '';
+// The keyboard :
 
-  for (let i = 0; i < length; i++) {
-      referralCode += characters.charAt(Math.floor(Math.random() * characters.length));
+// const keyboard_ = {
+//     reply_markup: {
+//       inline_keyboard: [
+//         [
+//           { text: '', callback_data: '' },
+//           { text: '', callback_data: '' },
+//         ],
+//
+//       ],
+//     },
+//   }
+
+const optionStates = {
+  "CopySell : Yes": false,
+  "CopySell : No": false,
+};
+
+async function executeBuyTrade(address, targetWalletAddress, amount) {
+  // Implement your logic to execute a buy trade on the target wallet
+  // console.log(`Executing buy trade for ${amount} ${asset} on ${targetWalletAddress}`);
+  // Example: Construct a transaction to simulate a buy trade
+  const transaction = new Transaction().add(
+    SystemProgram.transfer({
+      fromPubkey: new PublicKey(address),
+      toPubkey: new PublicKey(targetWalletAddress),
+      lamports: amount, // Example amount in lamports
+    })
+  );
+  // Example: Send and confirm the transaction
+  await sendAndConfirmTransaction(Connection, transaction, [
+    new Account(privateKey),
+  ]);
+}
+
+async function getPositionOfTrade(walletAddress) {
+  try {
+    const connection = new Connection("https://api.mainnet-beta.solana.com");
+
+    // Public key of the token wallet address
+    const publicKey = new PublicKey(walletAddress);
+
+    // Fetch transaction history of the wallet address
+    const transactions = await connection.getConfirmedSignaturesForAddress2(
+      publicKey,
+      {
+        limit: 100, // Limit to the last 100 transactions, adjust as needed
+      }
+    );
+
+    // Filter transactions to find buy open trades
+    const buyOpenTrades = transactions.filter(
+      (transaction) =>
+        transaction.instructions &&
+        transaction.instructions.some(
+          (instruction) =>
+            instruction.parsed &&
+            instruction.parsed.type === "transfer" && // Check if it's a token transfer
+            instruction.parsed.info.tokenAmount.uiAmountString.startsWith("-") // Check if it's a negative amount indicating a buy trade
+        )
+    );
+
+    // Print or return the buy open trades
+    console.log("Buy Open Trades:", buyOpenTrades);
+    return buyOpenTrades;
+  } catch (error) {
+    console.error("Error:", error);
+    throw error;
+  }
+}
+
+// Function to execute a sell trade on the target wallet
+async function executeSellTrade(address, targetWalletAddress, amount) {
+  // Implement your logic to execute a sell trade on the target wallet
+  // console.log(`Executing sell trade for ${amount} ${asset} on ${targetWalletAddress}`);
+  // Example: Construct a transaction to simulate a sell trade
+  const transaction = new Transaction().add(
+    SystemProgram.transfer({
+      fromPubkey: new PublicKey(address),
+      toPubkey: new PublicKey(targetWalletAddress),
+      lamports: amount, // Example amount in lamports
+    })
+  );
+  // Example: Send and confirm the transaction
+  await sendAndConfirmTransaction(Connection, transaction, [
+    new Account(privateKey),
+  ]);
+}
+
+async function copyTrade(
+  sourceWalletAddress,
+  targetWalletAddress,
+  amountToTrade
+) {
+  const connection = new Connection("https://api.mainnet-beta.solana.com");
+
+  while (true) {
+    // Fetch confirmed transactions from the Solana blockchain
+    const transactions = await connection.getConfirmedSignaturesForAddress2(
+      new PublicKey(sourceWalletAddress)
+    );
+
+    // Loop through transactions and analyze each one
+    // Loop through transactions and analyze each one
+    for (const transaction of transactions) {
+      // Fetch the transaction details
+      const txDetails = await connection.getTransaction(transaction.signature);
+
+      // Extract relevant information from the transaction
+      const { memo, signatures, instructions } = txDetails.transaction.message;
+
+      // Check if memo contains keywords indicating a buy or sell action
+      if (memo && memo.toLowerCase().includes("buy")) {
+        // Execute buy trade on target wallet
+        await executeBuyTrade(
+          sourceWalletAddress,
+          targetWalletAddress,
+          amountToTrade
+        );
+      } else if (memo && memo.toLowerCase().includes("sell")) {
+        // Execute sell trade on target wallet
+        await executeSellTrade(
+          sourceWalletAddress,
+          targetWalletAddress,
+          amountToTrade
+        );
+      } else {
+        // If memo doesn't indicate buy or sell, analyze instructions or other transaction data
+        // You'll need to implement additional logic based on the structure of instructions or other data
+        // Example: Check instruction types, recipient addresses, etc.
+      }
+    }
+
+    // Add a delay before fetching transactions again
+    await new Promise((resolve) => setTimeout(resolve, 60000)); // 60 seconds delay
+  }
+}
+
+async function getTransactions(address) {
+  try {
+    // Using Solana RPC API to get transactions
+    const response = await axios.post("https://api.mainnet-beta.solana.com", {
+      jsonrpc: "2.0",
+      id: 1,
+      method: "getConfirmedSignaturesForAddress2",
+      params: [address, { limit: 100 }],
+    });
+    return response.data.result;
+  } catch (error) {
+    console.error("Error fetching transactions:", error);
+    return [];
+  }
+}
+
+async function calculateProfit(transactions) {
+  const now = Date.now();
+  const oneWeekAgo = now - 7 * 24 * 60 * 60 * 1000; // 7 days ago
+
+  let profit = 0;
+
+  transactions.forEach((transaction) => {
+    const timestamp = new Date(transaction.blockTime).getTime();
+
+    if (
+      timestamp >= oneWeekAgo &&
+      transaction.meta &&
+      transaction.meta.postBalances &&
+      transaction.meta.preBalances
+    ) {
+      const value =
+        transaction.meta.postBalances[0] - transaction.meta.preBalances[0];
+      // Assuming profit as incoming transactions only
+      if (transaction.transaction.message.accountKeys[0] === walletAddress) {
+        profit += value / 1e9; // Convert from lamports to SOL
+      }
+    }
+  });
+
+  return profit;
+}
+async function performCopyTrading() {
+  for (const pair of copyTrading) {
+    const sourceWalletAddress = pair[0];
+    const targetWalletAddress = pair[1];
+    await copyTrade(
+      sourceWalletAddress,
+      targetWalletAddress,
+      10 * Math.pow(10, 9)
+    );
+  }
+}
+// Function to toggle the state of an option
+function toggleOption(chatId, option) {
+  optionStates[option] = !optionStates[option];
+  return optionStates[option] ? "CopySell : Yes" : "CopySell : No";
+}
+async function sellTokens(chatId, recipientAddress, privateKey) {
+  try {
+    // Connect to Solana cluster
+    const connection = new Connection("https://api.devnet.solana.com");
+
+    // Your wallet's private key
+    const myPrivateKey = privateKey;
+    const myWallet = Keypair.fromSecretKey(Buffer.from(myPrivateKey, "base64"));
+
+    // Mint address for SOL token
+    const solMintAddress = new PublicKey(
+      "So11111111111111111111111111111111111111112"
+    );
+
+    // Get the token account for SOL tokens
+    const tokenAccount = await connection.getTokenAccountBalance(
+      myWallet.publicKey,
+      solMintAddress
+    );
+    const solTokenBalance = tokenAccount.value.uiAmount; // Get SOL token balance
+
+    // Create a new transaction to transfer all SOL tokens to the recipient
+    const transaction = new Transaction().add(
+      SystemProgram.transfer({
+        fromPubkey: myWallet.publicKey,
+        toPubkey: new PublicKey(recipientAddress),
+        lamports: solTokenBalance, // No SOL involved
+        instruction: {
+          keys: [
+            { pubkey: myWallet.publicKey, isSigner: true, isWritable: true },
+            {
+              pubkey: new PublicKey(recipientAddress),
+              isSigner: false,
+              isWritable: true,
+            },
+            { pubkey: solMintAddress, isSigner: false, isWritable: false },
+          ],
+          programId: new PublicKey(
+            "TokenkegQfeZyiNwAJbNbGKPFXCWuBvf9Ss623VQ5DA"
+          ),
+        },
+      })
+    );
+
+    // Sign and send the transaction
+    const signature = await connection.sendTransaction(transaction, [myWallet]);
+    bot.sendMessage(chatId, `Sold out successfully ${signature}`);
+    console.log("Transaction signature:", signature);
+  } catch (error) {
+    console.error("Error selling tokens:", error);
+  }
+}
+async function buyToken(chatId, token, privateKey) {
+  try {
+    // Connect to Solana cluster
+    const connection = new Connection("https://api.devnet.solana.com");
+
+    // Your wallet's private key
+    const myPrivateKeyHex = privateKey;
+    const myWallet = Keypair.fromSecretKey(myPrivateKeyHex);
+
+    // Your token program ID
+    const tokenProgramId = new PublicKey(
+      "TokenkegQfeZyiNwAJbNbGKPFXCWuBvf9Ss623VQ5DA"
+    );
+
+    // Token buying account
+    const buyingAccount = new Keypair();
+
+    // Your token mint address
+    const tokenMintAddress = new PublicKey(token); // Assuming token is a buffer
+
+    // Get the size of the account data structure required by the token program
+    const tokenAccountSize = await connection.getAccountInfo(tokenMintAddress);
+    if (tokenAccountSize == null) {
+      bot.sendMessage(chatId, `The token entered is wrong`);
+    } else {
+      const space = tokenAccountSize.data.length + 165; // Add some extra space for future token transactions
+
+      // Create a new transaction
+      const transaction = new Transaction().add(
+        SystemProgram.createAccount({
+          fromPubkey: myWallet.publicKey,
+          newAccountPubkey: buyingAccount.publicKey,
+          lamports: await connection.getMinimumBalanceForRentExemption(space),
+          space: space,
+          programId: tokenProgramId,
+        })
+      );
+
+      // Sign the transaction
+      const signature = await connection.sendTransaction(transaction, [
+        myWallet,
+        buyingAccount,
+      ]);
+      console.log("Transaction signature:", signature);
+      bot.sendMessage(chatId, `Bought the token successfully ${signature}`);
+    }
+  } catch (error) {
+    console.error("Error buying token:", error);
+  }
+}
+
+let startCommandTriggered = false; // Flag to track if the /start command has been triggered
+function generateWalletAddress() {
+  return new Promise((resolve, reject) => {
+    try {
+      const keypair = Keypair.generate();
+      const publicKey = keypair.publicKey.toString();
+      const privateKeyHex = Buffer.from(keypair.secretKey).toString("hex");
+
+      resolve({
+        publicKey,
+        privateKey: privateKeyHex,
+      });
+    } catch (error) {
+      reject(error);
+    }
+  });
+}
+
+const rpcEndpoint = "https://api.mainnet-beta.solana.com";
+
+async function getSolanaBalance(walletAddress) {
+  // Initialize connection to the Solana network
+  const connection = new Connection(rpcEndpoint, "confirmed");
+
+  try {
+    // Convert the wallet address to a PublicKey object
+    const publicKey = new PublicKey(walletAddress);
+
+    // Get the balance of the specified wallet address
+    const balance = await connection.getBalance(publicKey);
+    return balance;
+  } catch (error) {
+    console.error("Error fetching balance:", error);
+    return null;
+  }
+}
+function getRefCode() {
+  const characters = "ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789"; // You can modify this as per your requirements
+  const codeLength = 8; // Length of the referral code
+  let referralCode = "";
+
+  for (let i = 0; i < codeLength; i++) {
+    referralCode += characters.charAt(
+      Math.floor(Math.random() * characters.length)
+    );
   }
 
   return referralCode;
 }
-async function fetchWalletStats(walletAddress) {
+async function getPositions(chatId, publicKey) {
   try {
-      // Fetch recent transactions for the wallet
-      const response = await axios.post('https://api.mainnet-beta.solana.com', {
-          jsonrpc: '2.0',
-          id: 1,
-          method: 'getConfirmedSignaturesForAddress2',
-          params: [walletAddress, { limit: 10000 }]
-      });
-      const transactions = response.data.result;
+    // Connect to Solana cluster
+    const connection = new Connection("https://api.devnet.solana.com");
 
-      // Calculate 10 days ago
-      const tenDaysAgo = new Date();
-      tenDaysAgo.setDate(tenDaysAgo.getDate() - 10);
+    // Your wallet's public key
+    const myPublicKey = publicKey;
+    const myWallet = new PublicKey(myPublicKey);
 
-      // Filter transactions for the past 10 days
-      const recentTransactions = transactions.filter(tx => new Date(tx.blockTime) > tenDaysAgo);
+    // Fetch token accounts for the wallet
+    const tokenAccounts = await connection.getTokenAccountsByOwner(myWallet);
 
-      // Calculate total transactions and total SOL transferred
-      const totalTransactions = recentTransactions.length;
-      const totalSolTransferred = recentTransactions.reduce((acc, tx) => acc + (tx.meta.preBalances[0] - tx.meta.postBalances[0]), 0) / 10 ** 9; // Convert lamports to SOL
-
-      return {
-          totalTransactions,
-          totalSolTransferred
-      };
+    // Iterate over token accounts and fetch balances
+    for (const account of tokenAccounts.value) {
+      const accountInfo = await connection.getAccountInfo(
+        new PublicKey(account.pubkey)
+      );
+      const { mint, tokenAmount } = accountInfo.data.parsed.info;
+      console.log(`Token: ${mint}, Postion: ${tokenAmount.uiAmount}`);
+      bot.sendMessage(
+        chatId,
+        `Tokens : ${mint} \n\n Position : ${tokenAmount.uiAmount}`
+      );
+    }
   } catch (error) {
-      console.error('Error fetching wallet stats:', error);
-      throw error;
+    console.error("Error fetching positions:", error);
   }
 }
 
+async function transfer(chatId, senderPrivateKey, recipientAddress, amount) {
+  try {
+    const connection = new Connection("https://api.mainnet-beta.solana.com");
+    // Create a new sender account using the private key
+    const senderAccount = new Account(senderPrivateKey);
 
-function amendJsonFile(fileName, newName , data_ammend) {
-  // Read the content of the JSON file
-  fs.readFile(fileName, 'utf8', (err, data) => {
-      if (err) {
-          console.error('Error reading file:', err);
-          return;
-      }
+    // Get the public key of the recipient
+    const recipientPublicKey = new PublicKey(recipientAddress);
 
-      try {
-          // Parse JSON content
-          const jsonData = JSON.parse(data);
+    // Get the recent blockhash
+    const blockhash = await connection.getRecentBlockhash();
 
-          // Amend the data with the new name
-          jsonData[newName] = data_ammend;
+    // Create a new transaction
+    const transaction = new Transaction().add(
+      // Transfer SOL from sender to recipient
+      SystemProgram.transfer({
+        fromPubkey: senderAccount.publicKey,
+        toPubkey: recipientPublicKey,
+        lamports: amount * 10 ** 9, // Convert SOL to lamports (1 SOL = 10^9 lamports)
+      })
+    );
 
-          // Convert JSON back to string
-          const updatedData = JSON.stringify(jsonData, null, 2);
+    // Sign the transaction
+    transaction.sign(senderAccount);
 
-          // Rewrite the file with updated content
-          fs.writeFile(fileName, updatedData, 'utf8', (err) => {
-              if (err) {
-                  console.error('Error writing to file:', err);
-                  return;
-              }
-              console.log('File updated successfully.');
-          });
-      } catch (error) {
-          console.error('Error parsing JSON:', error);
-      }
-  });
+    // Send the transaction
+    const signature = await connection.sendTransaction(transaction, [
+      senderAccount,
+    ]);
+
+    bot.sendMessage(chatId, "Transaction sent: " + signature);
+  } catch (error) {
+    console.error("Error transferring SOL:", error);
+  }
 }
-bot.onText(/\/check (.+)/, (msg, match) => {
-  // Extract the wallet address from the message
-  const walletAddress = match[1];
+
+// Replace 'YOUR_TELEGRAM_BOT_TOKEN' with your actual bot token
+const token = "7072871960:AAEl3yjLpLIOrxhX-QvlHnGM5tSI0ZKtgvk";
+let state = "idle";
+// Create a bot that uses 'polling' to fetch new updates
+const bot = new TelegramBot(token, { polling: true });
+
+bot.onText(/\/start(?: (.*))?/, async (msg) => {
+  startCommandTriggered = true; // Set the flag to true when /start command is triggered
+  console.log("msg recieved");
   const chatId = msg.chat.id;
-  // Now you can do whatever you want with the wallet address, for example, store it
-  fetchWalletStats(walletAddress)
-    .then(walletStats => {
-        console.log("Wallet Stats for the Past 10 Days:");
-        console.log("Total Transactions:", walletStats.totalTransactions);
-        console.log("Total SOL Transferred:", walletStats.totalSolTransferred, "SOL");
-        bot.sendMessage(chatId,  `Wallet Stats for the Past 10 days :\n\n <b>Total Transactions:</b> ${walletStats.totalTransactions}\n <b>Total SOL Transferred:</b> ${walletStats.totalSolTransferred} SOL`)
-    })
-    .catch(error => {
-        console.error('Error:', error);
-    });
-});
-// Listen for the /start command
-bot.onText(/\/start/, (msg) => {
+  const referralCode = match[1] || ""; // Extract referral code from the match or use an empty string if not provided
+  console.log(referralCode);
+  // Process the referral code (e.g., store it in a database)
+  // console.log(`Referral code ${referralCode} received from user ${msg.from.id}`);
+  fs.readFile("./ref.json", "utf8", async (err, data) => {
+    if (err) {
+      console.error("Error reading file:", err);
+      return;
+    }
+
+    const jsonData___ = JSON.parse(data);
+    let referralCodeMatched = false;
+    console.log(jsonData___);
+    // Check if referral code matches any entry in the JSON data
+    for (const userId in jsonData___) {
+      const userData = jsonData___[userId];
+      for (const uniqueId in userData) {
+        const user = userData[uniqueId];
+        if (user && user.code === referralCode) {
+          if (!user.hasOwnProperty("buys")) {
+            user.buys = 1;
+          } else {
+            user.buys += 1;
+          }
+          user.money += 0.1;
+          referralCodeMatched = true;
+          break;
+        }
+      }
+      if (referralCodeMatched) {
+        break;
+      }
+    }
+
+    // Rewrite the updated JSON data to the file
+    if (referralCodeMatched) {
+      fs.writeFile(
+        "./data.json",
+        JSON.stringify(jsonData___, null, 2),
+        (err) => {
+          if (err) {
+            console.error("Error writing file:", err);
+            return;
+          }
+          console.log("Data updated successfully!");
+        }
+      );
+    }
     const chatId = msg.chat.id;
+    const username = msg.from.username;
     const keyboard_1 = {
-        reply_markup: {
-          inline_keyboard: [
-            [
-              { text: '❓How to use Bot', callback_data: 'how' },
+      reply_markup: {
+        inline_keyboard: [
+          [
+            { text: "Buy", callback_data: "buy" },
+            { text: "Sell", callback_data: "sell" },
+            { text: "Positions", callback_data: "positions" },
+          ],
+          [
+            { text: "CopyTrade", callback_data: "copytrade" },
+            { text: "LP Sniper 🔜", callback_data: "lp_sniper" },
+            { text: "Check Wallet", callback_data: "check_wallet" },
+          ],
+          [
+            { text: "Referrals", callback_data: "referrals" },
+            { text: "Settings", callback_data: "setting" },
+          ],
+          [
+            { text: "Withdrawl", callback_data: "withdraw" },
+            { text: "Help", callback_data: "help" },
+          ],
+        ],
+      },
+    };
+    let jsonData = {}; // Declared outside the try-catch block
+    try {
+      const data = fs.readFileSync(filePath, "utf8"); // Read file as text
+      try {
+        jsonData = data ? JSON.parse(data) : {}; // Parse JSON data if not empty, otherwise assign an empty object
+      } catch (error) {
+        console.error("Error parsing JSON data:", error);
+        jsonData = {}; // Assign an empty object in case of parsing error
+      }
+
+      if (jsonData.hasOwnProperty(username)) {
+        let publicKey = jsonData[username].publicKey;
+        const balance_ = await getSolanaBalance(publicKey);
+        if (balance_ !== null) {
+          console.log("Balance:", balance_);
+          let messageText = `Welcome to Sidemix\n\nSolana's fastest bot to trade any coin (SPL token)\nYou currently have no SOL balance. To get started with trading, send some SOL to your sidemix wallet address:\n${publicKey}\nBalance: ${balance_}SOL\nTo purchase a token, simply enter its address or share the Birdeye link of the coin.\nFor more information about your wallet and to access your private key, click the check wallet button below. While Sidemix ensures the security of user funds, exposing your private key can compromise the safety of your funds.`;
+          bot
+            .sendMessage(
+              chatId,
+              `Welcome to Sidemix\n\nSolana's fastest bot to trade any coin (SPL token)\nYou currently have no SOL balance. To get started with trading, send some SOL to your sidemix wallet address:\n${publicKey}\nBalance: ${balance_}SOL\nTo purchase a token, simply enter its address or share the Birdeye link of the coin.\nFor more information about your wallet and to access your private key, click the check wallet button below. While Sidemix ensures the security of user funds, exposing your private key can compromise the safety of your funds.`,
+              { parse_mode: "HTML", ...keyboard_1 }
+            )
+            .then((sentMessage) => {
+              // Store the message data with its unique identifier (message ID)
+              messages[sentMessage.message_id] = {
+                text: messageText,
+                options: keyboard_1.reply_markup.inline_keyboard,
+              };
+            });
+        } else {
+          console.log("Failed to fetch balance.");
+          bot.sendMessage(chatId, "Bot is receiving Network Connection issue");
+        }
+      } else {
+        let publicKey;
+        let privateKey;
+        try {
+          wallet = await generateWalletAddress();
+          publicKey = wallet.publicKey;
+          privateKey = wallet.privateKey;
+          console.log(publicKey);
+        } catch (error) {
+          console.error("Error generating wallet address:", error);
+          bot.sendMessage(chatId, "Error generating wallet address");
+          return; // Exit function if wallet address generation fails
+        }
+
+        const balance = await getSolanaBalance(publicKey);
+        if (balance !== null) {
+          console.log("Balance:", balance);
+          let messageText = `Welcome to Sidemix\n\nSolana's fastest bot to trade any coin (SPL token)\nYou currently have no SOL balance. To get started with trading, send some SOL to your sidemix wallet address:\n${publicKey}\nBalance: ${balance}SOL\nTo purchase a token, simply enter its address or share the Birdeye link of the coin.\nFor more information about your wallet and to access your private key, click the check wallet button below. While Sidemix ensures the security of user funds, exposing your private key can compromise the safety of your funds.`;
+          bot
+            .sendMessage(
+              chatId,
+              `Welcome to Sidemix\n\nSolana's fastest bot to trade any coin (SPL token)\nYou currently have no SOL balance. To get started with trading, send some SOL to your sidemix wallet address:\n${publicKey}\nBalance: ${balance}SOL\nTo purchase a token, simply enter its address or share the Birdeye link of the coin.\nFor more information about your wallet and to access your private key, click the check wallet button below. While Sidemix ensures the security of user funds, exposing your private key can compromise the safety of your funds.`,
+              { parse_mode: "HTML", ...keyboard_1 }
+            )
+            .then((sentMessage) => {
+              // Store the message data with its unique identifier (message ID)
+              messages[sentMessage.message_id] = {
+                text: messageText,
+                options: keyboard_1.reply_markup.inline_keyboard,
+              };
+            });
+        } else {
+          console.log("Failed to fetch balance.");
+          bot.sendMessage(chatId, "Bot is receiving Network Connection issue");
+        }
+        jsonData[username] = {
+          publicKey: publicKey,
+          privateKey: privateKey,
+        }; // Corrected assignment
+        fs.writeFileSync(filePath, JSON.stringify(jsonData)); // Corrected writing to file
+      }
+    } catch (error) {
+      console.error("Error:", error);
+    }
+  });
+});
+bot.onText(/\/checkWallet/, async (msg) => {
+  startCommandTriggered = true; // Set the flag to true when /start command is triggered
+  const chatId = msg.chat.id;
+  const username = msg.from.username;
+  state = "wallet_";
+  bot.sendMessage(chatId, `Enter the Solana address to check`);
+});
+// Handle callback queries
+bot.on("callback_query", (callbackQuery) => {
+  // const option = callbackQuery.data;
+  const action = callbackQuery.data;
+  const msg = callbackQuery.message;
+  const chatId = msg.chat.id;
+  const message = messages[callbackQuery.message.message_id];
+  const username = msg.from.username;
+  if (action == "/start") {
+    startCommandTriggered = false;
+    return;
+  }
+  // Perform different actions based on the callback data
+  switch (action) {
+    case "add_copytrade":
+      if (message) {
+        const optionClicked = callbackQuery.data;
+        console.log("Whole message with options:", message);
+        console.log("Option clicked:", optionClicked);
+
+        // Find the text of the "target Wallet" option
+        const targetOption = message.options.find((row) =>
+          row.some((option) => option.callback_data === "target")
+        );
+
+        if (targetOption && targetOption.text === "target Wallet") {
+          console.log(
+            "Option 'target Wallet' text matches. Sending message..."
+          );
+          // Send message since the text of the option matches "target Wallet"
+          // bot.sendMessage(callbackQuery.message.chat.id, "Sending message because 'target Wallet' text matches.");
+          bot.sendMessage(chatId, "please enter the wallet...");
+        } else {
+          const optionsObject = {
+            tag: message.options[0][0].text,
+            target: message.options[1][0].text,
+            buy_percentage: message.options[2][0].text,
+            copy_sell: message.options[2][1].text,
+            buy_gas: message.options[3][0].text,
+            sell_gas: message.options[3][1].text,
+            slippage: message.options[4][0].text,
+          };
+          console.log(
+            "Option text doesn't match 'target Wallet'. Sending message..."
+          );
+          // Send message since option text doesn't match "target Wallet"
+          // bot.sendMessage(callbackQuery.message.chat.id, "Hello nigger.");
+          bot.sendMessage(chatId, "Congrats! CopyTrade added successfully!");
+          fs.readFile("data.json", "utf8", (err, data) => {
+            if (err) {
+              console.error("Error reading file:", err);
+              return;
+            }
+
+            // Parse the JSON data
+            const userData = JSON.parse(data);
+
+            // Iterate through each object in the JSON data
+            for (const user in userData) {
+              // Check if the username matches
+              if (user === username) {
+                // Return the private key of the user
+                copyTrading.push([userData[user].privateKey, messageText]);
+              }
+            }
+
+            // Return null if the username is not found
+            return null;
+          });
+          fs.readFile("./copytrade.json", "utf8", (err, data) => {
+            if (err) {
+              console.error("Error reading file:", err);
+              return;
+            }
+
+            let trades = [];
+            if (data) {
+              try {
+                trades = JSON.parse(data);
+              } catch (error) {
+                console.error("Error parsing JSON data:", error);
+              }
+            }
+
+            if (Array.isArray(trades)) {
+              trades.forEach((trade) => {
+                if (trade.data[username] && trade.data[username]) {
+                  // bot.sendMessage(chatId, "Selling the Trade...");
+                  trade.data[username][optionsObject.tag] = optionsObject;
+                } else {
+                  // bot.sendMessage(
+                  // chatId,
+                  // `You don't have any token yet! Start trading in the Buy Menu`
+                  // );
+                  trade.data[username][optionsObject.tag] = optionsObject;
+                }
+              });
+            }
+            fs.writeFileSync(
+              "./copytrade.json",
+              JSON.stringify(trades, null, 2)
+            );
+          });
+        }
+      } else {
+        console.log("Message data not found.");
+      }
+
+      // if (action == "target Wallet") {
+      break;
+    //   bot.sendMessage(chatId, "please enter the wallet...");
+    // } else {
+    //   bot.sendMessage(chatId, "Congrats! CopyTrade added successfully!");
+    // }
+    case "buy":
+      // Handle the 'Buy' option
+      bot.sendMessage(chatId, "Enter a token symbol or address to buy");
+      state = "buy";
+      break;
+    case "sell":
+      // Handle the 'Sell' option
+      fs.readFile("./trade.json", "utf8", (err, data) => {
+        if (err) {
+          console.error("Error reading file:", err);
+          return;
+        }
+
+        let trades = [];
+        if (data) {
+          try {
+            trades = JSON.parse(data);
+          } catch (error) {
+            console.error("Error parsing JSON data:", error);
+          }
+        }
+
+        if (Array.isArray(trades)) {
+          trades.forEach((trade) => {
+            if (trade.data[username] && trade.data[username]["token"]) {
+              // bot.sendMessage(chatId, "Selling the Trade...");
+              bot.sendMessage(
+                chatId,
+                "Enter the address where you want to sell it"
+              );
+              state = "sell";
+              // sellTrade();
+            } else {
+              bot.sendMessage(
+                chatId,
+                `You don't have any token yet! Start trading in the Buy Menu`
+              );
+            }
+          });
+        } else {
+          bot.sendMessage(
+            chatId,
+            "You don't have any Token Yet! Start Trading in the Buy Menu"
+          );
+        }
+      });
+      break;
+    case "positions":
+      // Handle the 'Positions' option
+      fs.readFile("trade.json", "utf8", (err, data) => {
+        if (err) {
+          console.error("Error reading file:", err);
+          return;
+        }
+
+        // Parse the JSON data
+        let trades = {};
+        try {
+          trades = JSON.parse(data);
+        } catch (error) {
+          console.error("Error parsing JSON data:", error);
+          bot.sendMessage(
+            chatId,
+            "Error reading your positions. Please try again later."
+          );
+          return;
+        }
+
+        // Check if trades is empty or null
+        if (Object.keys(trades).length === 0) {
+          bot.sendMessage(
+            chatId,
+            "You do not have any tokens yet! Start trading in the Buy menu."
+          );
+          return;
+        }
+
+        // Loop through each object in the JSON array
+        Object.values(trades).forEach((trade) => {
+          // Check if the 'token' property of the user is true
+          if (
+            trade.data &&
+            trade.data[username] &&
+            trade.data[username]["token"]
+          ) {
+            bot.sendMessage("Getting Position...");
+            // getPosition();
+            let privateKey = "";
+            fs.readFile("./data.json", "utf8", (err, data) => {
+              if (err) {
+                console.error("Error reading file:", err);
+                return;
+              }
+
+              let trades_ = [];
+              if (data) {
+                try {
+                  trades = JSON.parse(data);
+                } catch (error) {
+                  console.error("Error parsing JSON data:", error);
+                }
+              }
+
+              if (Array.isArray(trades_)) {
+                trades_.forEach((trade) => {
+                  if (trade.data[username] && trade.data[username]) {
+                    // bot.sendMessage(chatId, "Selling the Trade...");
+                    privateKey = trade.data[username]["publicKey"];
+                    getPositions(chatId, privateKey);
+                  }
+                });
+              }
+            });
+          } else {
+            bot.sendMessage(
+              chatId,
+              "You don't have any Token Yet! Start Trading in the Buy Menu"
+            );
+          }
+        });
+      });
+      break;
+
+    case "limit_orders":
+      // Handle the 'Limit Orders' option
+      fs.readFile("trade.json", "utf8", (err, data) => {
+        if (err) {
+          console.error("Error reading file:", err);
+          return;
+        }
+
+        // Parse the JSON data
+        let trades = {};
+        try {
+          trades = JSON.parse(data);
+        } catch (error) {
+          console.error("Error parsing JSON data:", error);
+          bot.sendMessage(
+            chatId,
+            "Error reading your limit orders. Please try again later."
+          );
+          return;
+        }
+
+        // Check if trades is empty or null
+        if (Object.keys(trades).length === 0) {
+          bot.sendMessage(
+            chatId,
+            "You have no active limit orders. Create a limit order from the Buy/Sell menu."
+          );
+          return;
+        }
+
+        // Loop through each object in the JSON array
+        Object.values(trades).forEach((trade) => {
+          // Check if the 'token' property of the user is true
+          if (
+            trade.data &&
+            trade.data[username] &&
+            trade.data[username]["token"]
+          ) {
+            bot.sendMessage("Yet to get the api key....");
+            // getLimitOrder();
+          }
+        });
+      });
+      break;
+
+    case "dca_order":
+      // Handle the 'DCA Orders' option
+      fs.readFile("trade.json", "utf8", (err, data) => {
+        if (err) {
+          console.error("Error reading file:", err);
+          return;
+        }
+
+        // Parse the JSON data
+        let trades = {};
+        try {
+          trades = JSON.parse(data);
+        } catch (error) {
+          console.error("Error parsing JSON data:", error);
+          bot.sendMessage(
+            chatId,
+            "Error reading your DCA orders. Please try again later."
+          );
+          return;
+        }
+
+        // Check if trades is empty or null
+        if (Object.keys(trades).length === 0) {
+          bot.sendMessage(
+            chatId,
+            "You have no active DCA orders. Create a DCA order from the Buy/Sell menu."
+          );
+          return;
+        }
+
+        // Loop through each object in the JSON array
+        Object.values(trades).forEach((trade) => {
+          // Check if the 'token' property of the user is true
+          if (
+            trade.data &&
+            trade.data[username] &&
+            trade.data[username]["token"]
+          ) {
+            bot.sendMessage("Yet to get the api key");
+            // getDCA();
+          }
+        });
+      });
+      break;
+    case "copytrade":
+      if (callbackQuery.data != "/start") {
+        const keyboard = {
+          reply_markup: {
+            inline_keyboard: [
+              [
+                { text: "New", callback_data: "_copytrade" },
+                { text: "Pause All", callback_data: "pause_all" },
+              ],
             ],
-            [
-              { text: '🙎‍♂️Refferal System', callback_data: 'refferal' },
-              
-            ],
-            [
-                { text: '🤑Buy Pro Version', callback_data: 'pro' },
-                
+          },
+        };
+        bot.sendMessage(
+          chatId,
+          `Copy Trade\n\nCopy Trade allows you to copy the buys and sells of any target wallet. \n🟢 Indicates a copy trade setup is active.\n🟠 Indicates a copy trade setup is paused.\nYou do not have any copy trades setup yet. Click on the New button to create one!`,
+          { parse_mode: "HTML", ...keyboard }
+        );
+        break;
+      }
+    case "_copytrade":
+      if (callbackQuery.data != "/start" || startCommandTriggered == true) {
+        const keyboard_1 = {
+          reply_markup: {
+            inline_keyboard: [
+              [{ text: "tag", callback_data: "tag" }],
+              [{ text: "target Wallet", callback_data: "target" }],
+              [
+                {
+                  text: "Buy Percentage : 100%",
+                  callback_data: "buy_percentage",
+                },
+                { text: "CopySell : Yes", callback_data: "copy_sell" },
               ],
               [
-                { text: '👉Check Wallet on Solana', callback_data: 'check' },
-                
+                { text: "Buy Gas : 0.0015 SOL", callback_data: "buy_gas" },
+                { text: "Sell Gas : 0.0015 SOL", callback_data: "sell_gas" },
               ],
-          ],
-        },
-      };
-    // Send a message with the menu
-    bot.sendMessage(chatId, 'Choose an option:', { parse_mode: "HTML", ...keyboard_1 });
-});
-
-// Listen for callback queries
-bot.on('callback_query', (callbackQuery) => {
-    const chatId = callbackQuery.message.chat.id;
-    const data = callbackQuery.data;
-    const userName = callbackQuery.from.username;
-    // Respond to each option
-    switch (data) {
-        case 'how':
-            const imageCaption = `We have made 3 Knowledge Hub videos for you:\n<a href="https://youtu.be/2aGDhsMFmx4">What is copytrade on Solana</a>\n<a href="https://youtu.be/zkGpRFkIzwI">How to use bot</a>\n<a href="https://youtu.be/dXjKcTQ0Ils">How to analyze and set-up copytrade</a>\nAs well to that read our docs (available on 12 languages):\n<a href="https://linktr.ee/Whale_finders">👀Documentation</a>`
-            const imageFilePath = './pic.jpg'; // Update with your local file path
-
-            // Check if the file exists
-            fs.access(imageFilePath, fs.constants.F_OK, (err) => {
-                if (err) {
-                    console.error('File does not exist');
-                    bot.sendMessage(chatId, 'Error: File not found');
-                    return;
-                }
-
-                // Send the photo
-                bot.sendPhoto(chatId, fs.readFileSync(imageFilePath), {
-                    caption: imageCaption,
-                    parse_mode: "HTML"
-                }).catch((err) => {
-                    console.error('Error sending photo:', err);
-                    bot.sendMessage(chatId, 'Error sending photo');
-                });
-            });
-            break;
-        case 'check':
-            const message = `
-            🤖To get wallet stats for 10 days type:\n/check Wallet\n🆓Free version is limited to 3 checks a day. To use it you need to be subscribed to @Whale_finders_blog_eng.\n🌟To get unlimited checks and lists of wallets from contract checks get PRO\n(Auto paybot) @Whale_pay_bot\n(Manager 6am-6pm GMT) @zimmaman`
-            bot.sendMessage(chatId, message);
-            break;
-            case 'refferal':
-    console.log("referrals clicked");
-    const keyboard_1 = {
-        reply_markup: {
-            inline_keyboard: [
-                [
-                    { text: 'Claim Money', callback_data: 'claim' },
-                ],
+              [{ text: "Slippage : 15%", callback_data: "slippage" }],
+              [{ text: "add", callback_data: "add_copytrade" }],
             ],
-        },
-    };
+          },
+        };
+        let messageText = `To setup a new Copy Trade:\n- Assign a unique name or “tag” to your target wallet, to make it easier to identify.\n- Enter the target wallet address to copy trade.\n- Enter the percentage of the target's buy amount to copy trade with, or enter a specific SOL amount to always use.\n- Toggle on Copy Sells to copy the sells of the target wallet.\n- Click “Add” to create and activate the Copy Trade.\nTo manage your Copy Trade:\n- Click the “Active” button to “Pause” the Copy Trade.\n- Delete a Copy Trade by clicking the “Delete” button.`;
+        bot
+          .sendMessage(
+            chatId,
+            `To setup a new Copy Trade:\n- Assign a unique name or “tag” to your target wallet, to make it easier to identify.\n- Enter the target wallet address to copy trade.\n- Enter the percentage of the target's buy amount to copy trade with, or enter a specific SOL amount to always use.\n- Toggle on Copy Sells to copy the sells of the target wallet.\n- Click “Add” to create and activate the Copy Trade.\nTo manage your Copy Trade:\n- Click the “Active” button to “Pause” the Copy Trade.\n- Delete a Copy Trade by clicking the “Delete” button.`,
+            { parse_mode: "HTML", ...keyboard_1 }
+          )
+          .then((sentMessage) => {
+            // Store the message data with its unique identifier (message ID)
+            messages[sentMessage.message_id] = {
+              text: messageText,
+              options: keyboard_1.reply_markup.inline_keyboard,
+            };
+          });
+      }
+      break;
 
-    const filePath___ = path.join(__dirname, './data.json');
-    console.log("reading file...");
-    fs.readFile(filePath___, 'utf8', (err, data) => {
-        console.log("file read!");
+    case "buy_gas":
+      state = "buy_gas";
+      bot.sendMessage(
+        chatId,
+        "Enter the priority fee to pay for buy trades. E.g 0.01 for 0.01 SOL"
+      );
+      break;
+    case "sell_gas":
+      state = "sell_gas";
+      bot.sendMessage(
+        chatId,
+        `Enter the priority fee to pay for sell trades. E.g 0.01 for 0.01 SOL`
+      );
+      break;
+    case "slippage":
+      state = "slippage";
+      bot.sendMessage(chatId, `Enter slippage % to use on copy trades`);
+      break;
+    case "buy_percentage":
+      bot.sendMessage(
+        chatId,
+        `Enter the percentage of the target's buy amount to copy trade with. E.g. with 50%, if the target buys with 1 SOL, you will buy with 0.5 SOL. If you want to buy with a fixed sol amount instead, enter a number. E.g. 0.1 SOL will buy with 0.1 SOL regardless of the target's buy amount.`
+      );
+      state = "buy_percentage";
+      break;
+    case "copy_sell":
+      const keyboard_1 = messages[callbackQuery.message.message_id].options;
+      const newText = toggleOption(action);
+
+      // Clone the original keyboard markup and update the text for the 'copy_sell' option
+      const newKeyboard = {
+        inline_keyboard: keyboard_1.map((row) => {
+          return row.map((option) => {
+            // Check if this is the option you want to change
+            if (option.callback_data === "copy_sell") {
+              // Compare using '===' for strict equality
+              // Change the text for this option
+              return { ...option, text: newText };
+            }
+            // Keep the rest of the options unchanged
+            return option;
+          });
+        }),
+      };
+
+      // Edit the message with the updated inline keyboard
+      bot.editMessageText(
+        `To setup a new Copy Trade:\n- Assign a unique name or “tag” to your target wallet, to make it easier to identify.\n- Enter the target wallet address to copy trade.\n- Enter the percentage of the target's buy amount to copy trade with, or enter a specific SOL amount to always use.\n- Toggle on Copy Sells to copy the sells of the target wallet.\n- Click “Add” to create and activate the Copy Trade.\nTo manage your Copy Trade:\n- Click the “Active” button to “Pause” the Copy Trade.\n- Delete a Copy Trade by clicking the “Delete” button.`,
+        {
+          chat_id: callbackQuery.message.chat.id,
+          message_id: callbackQuery.message.message_id,
+          reply_markup: {
+            inline_keyboard: newKeyboard.inline_keyboard,
+          },
+        }
+      );
+      break;
+    case "tag":
+      bot.sendMessage(chatId, `Enter a Custom name for this CopyTrade`);
+      state = "tag";
+      break;
+    case "target":
+      bot.sendMessage(chatId, `Enter the target wallet address to copy trade`);
+      state = "target";
+      break;
+
+    case "pause_all":
+      pause_all();
+      break;
+    case "lp_sniper":
+      bot.sendMessage(
+        chatId,
+        `Sniper just released in early access, and is available for selected users.\nTo get access before general release, read our tweet about it: https://twitter.com/TrojanOnSolana/status/1764719443568136627`
+      );
+      break;
+    case "check_wallet":
+      bot.sendMessage(chatId, `Enter the Solana address to check`);
+      state = "wallet_";
+      break;
+    case "new_pairs":
+      bot.sendMessage(
+        chatId,
+        `📈 OMNI | Omni Network (8m 38s ago)
+            6bgsD3NjS3Wh8w1RH6NYcTCGD2FT2XKDknJmQDfsYtxo
+            Renounced: ❌ | Not Rugged ✅
+            Market Cap: $16.09K
+            Liquidity: $27.06K | Locked: 0%
+            LP: 84.07% | Creator: 100%
+            Top 5: 0% | Top 20: 0%
+            🟢 LIVE Quick Buy: Achilles | Odysseus | Menelaus | Diomedes | Paris | Helenus | Hector
+            
+            📈 PIK | PIK PIK (5m 52s ago)
+            4pUCq18F6pJgwCAfS9EttuqA5GkUUB87Z78Gk4i6poms
+            Renounced: ✅ | Rugged ‼️
+            Market Cap: $5.796
+            Liquidity: $7.68 | Locked: 0%
+            LP: 66.24% | Creator: 70%
+            Top 5: 7.6% | Top 20: 29.6%
+            ⚠️ LIVE Quick Buy: Achilles | Odysseus | Menelaus | Diomedes | Paris | Helenus | Hector
+            
+            📈 IRANWAR | Iran War Token (5m 29s ago)
+            8BBB6fcR5fyZkm8FpqTVZRAGvCvsM2qURWVddwoSG9sd
+            Renounced: ✅ | Not Rugged ✅
+            Market Cap: $4.55K
+            Liquidity: $3.05K | Locked: 0%
+            LP: 33.46% | Creator: 0%
+            Top 5: 5.47% | Top 20: 20%
+            🟢 LIVE Quick Buy: Achilles | Odysseus | Menelaus | Diomedes | Paris | Helenus | Hector
+            
+            📈 PIK | PIK PIK  (5m 26s ago)
+            FQYDF6hdDM7e83VsFKisN2cYxp5gDYGQnHADZtdfKxnj
+            Renounced: ✅ | Rugged ‼️
+            Market Cap: $1.45
+            Liquidity: $0.00005155 | Locked: 0%
+            LP: 0% | Creator: 100%
+            Top 5: 0% | Top 20: 0%
+            ⚠️ LIVE Quick Buy: Achilles | Odysseus | Menelaus | Diomedes | Paris | Helenus | Hector
+            
+            📈 BOOB | Boob Coin (5m 11s ago)
+            BtQiU9atUj1KEm3krWZtaxNSN6poy22KPVsZh6ahQBKu
+            Renounced: ✅ | Not Rugged ✅
+            Market Cap: $1.34K
+            Liquidity: $2.27K | Locked: 0%
+            LP: 84.85% | Creator: 51.85%
+            Top 5: 0% | Top 20: 0%
+            🟢 LIVE Quick Buy: Achilles | Odysseus | Menelaus | Diomedes | Paris | Helenus | Hector`
+      );
+      break;
+    case "claim":
+      let amount__ = "";
+      let publicKey = "";
+      fs.readFile("data.json", "utf8", (err, data) => {
         if (err) {
-            console.error('Error reading file:', err);
-            return;
+          console.error("Error reading data.json:", err);
+          return;
         }
 
         try {
-            let jsonData = JSON.parse(data);
-            
-            // Find user entry
-            const userEntry = jsonData[userName];
-            
-            if (userEntry) {
-                console.log("user found");
-                const code = Object.keys(userEntry)[0]; // Extract referral code
-                console.log(`User with username '${userName}' exists.`);
-                bot.sendMessage(chatId, `
-                Get 15% from people who buy from your referral code\n🤑Paying out on mondays\nYour referral code:${code}\nShare it with your audience.\n\nPeople used link: ${userEntry[code].buys}\nYour referral balance: ${userEntry[code].money}$\nWhen a person uses your link, we automatically save their ID under your reflink. As soon as the user pays using the bot or through the manager, you get the balance added.
-                `, { parse_mode: "HTML", ...keyboard_1 });
+          // Parse the JSON data
+          const jsonData = JSON.parse(data);
 
+          // Get the list of usernames from the JSON data
+          const usernamesToCheck = Object.keys(jsonData);
+
+          // Function to check if a username exists and store its publicKey
+          function checkUsername(username) {
+            if (jsonData.hasOwnProperty(username)) {
+              console.log(`Username '${username}' exists.`);
+              publicKey = jsonData[username].publicKey;
+              console.log(
+                `Public key of '${username}': ${publicKeyOfUsername}`
+              );
             } else {
-                console.log("user not found , generating code!");
-                const code = generateReferralCode();
-                console.log(`User with username '${userName}' does not exist.`);
-                bot.sendMessage(chatId, `
-                Get 15% from people who buy from your referral code\n🤑Paying out on mondays\nYour referral code:${code}\nShare it with your audience.\n\nPeople used link: 0\nBuys: 0\nYour referral balance: 0.0$\nAlready claimed money: 0$\nWhen a person uses your link, we automatically save their ID under your reflink. As soon as the user pays using the bot or through the manager, you get the balance added.\nWrite @zimmaman to get personal assistance
-                `, { parse_mode: "HTML", ...keyboard_1 });
-
-                // Update data with new user entry
-                jsonData[userName] = {
-                    [code]: {
-                        'username': userName,
-                        'money': 0,
-                        'buys': 0,
-                        'code': code
-                    }
-                };
-                fs.writeFile(filePath___, JSON.stringify(jsonData), (err) => {
-                    if (err) {
-                        console.error('Error writing to file:', err);
-                        return;
-                    }
-                    console.log('Data written to file.');
-                });
+              console.log(`Username '${username}' does not exist.`);
             }
+          }
+
+          // Example: Check if "Shaheer_ali" exists
+          // const usernameToFind = "Shaheer_ali";
+          checkUsername(username);
+
+          // You can access publicKeyOfUsername here or anywhere else in the code
+          // For example:
+          // console.log(publicKeyOfUsername);
         } catch (error) {
-            console.error('Error parsing JSON:', error);
+          console.error("Error parsing JSON:", error);
         }
-    });
+      });
+      const filePath__ = path.join(__dirname, "./ref.json");
+      console.log("reading file...");
+      fs.readFile(filePath__, "utf8", (err, data) => {
+        console.log("file read!");
+        if (err) {
+          console.error("Error reading file:", err);
+          return;
+        }
 
-    break;
+        let jsonData = JSON.parse(data);
 
-        case 'claim':
-            bot.sendMessage(chatId,"You don't have money to claim yet")
-        case 'pro':
-            bot.sendMessage(chatId, `
-            🌟In PRO version:🌟\n1️⃣ We drop ~200 profitable wallets a day to private group\n2️⃣ No such limits on wallet checks.\n3️⃣Get files of wallets from checked tokens(in group)\nEach file have all wallets which were trading with next data: wallet,amount of buys, amount of sells, buy sum, sell sum, xmade(sell sum/buy sum)\n💰Cost is just $59 a month\n(Auto paybot) @whale_pay_bot\n(Manager 6am-6pm GMT) @zimmaman
-            `);
-            break;
-    }
+        // Find user entry
+        const userEntry = jsonData[username];
+
+        if (userEntry) {
+          const code = Object.keys(userEntry)[0]; // Extract referral code
+          amount__ = userEntry[code].money;
+        }
+      });
+      transfer(
+        chatId,
+        publicKey,
+        "44de60ab948bb40a0d5bc1931125ad926b02da0ae369600703dcaca005f4bcb80ef14d98679391c771ef015761c88b80562c65de3f1b60516cd4157c67bf9e58",
+        amount__
+      );
+      break;
+    case "referrals":
+      let ref_code = getRefCode();
+      const filePath___ = path.join(__dirname, "./ref.json");
+      console.log("reading file...");
+      fs.readFile(filePath___, "utf8", (err, data) => {
+        console.log("file read!");
+        if (err) {
+          console.error("Error reading file:", err);
+          return;
+        }
+
+        try {
+          let jsonData = JSON.parse(data);
+
+          // Find user entry
+          const userEntry = jsonData[username];
+
+          if (userEntry) {
+            const code = Object.keys(userEntry)[0]; // Extract referral code
+            const keyboard_1 = {
+              reply_markup: {
+                inline_keyboard: [
+                  [{ text: "Claim Money", callback_data: "claim" }],
+                ],
+              },
+            };
+            bot.sendMessage(
+              chatId,
+              `
+                      Your Referral:
+                      People used link: ${userEntry[code].buys}\nYour referral balance: ${userEntry[code].money}
+                      
+                      We've established a tiered referral system, ensuring that as more individuals come onboard, rewards extend through five different layers of users. This structure not only benefits community growth but also significantly increases the percentage share of fees for everyone.
+                      
+                      Stay tuned for more details on how we'll reward active users and happy trading!
+                      Your Referral Code : ${code}
+                      `,
+              { parse_mode: "HTML", ...keyboard_1 }
+            );
+          } else {
+            bot.sendMessage(
+              chatId,
+              `
+                      Your Referral:
+                      People used link: 0 \nYour referral balance: 0
+                      
+                      We've established a tiered referral system, ensuring that as more individuals come onboard, rewards extend through five different layers of users. This structure not only benefits community growth but also significantly increases the percentage share of fees for everyone.
+                      
+                      Stay tuned for more details on how we'll reward active users and happy trading!
+                      Your Referral Code : ${ref_code}
+                      `
+            );
+            // Update data with new user entry
+            jsonData[username] = {
+              [code]: {
+                username: username,
+                money: 0,
+                buys: 0,
+                code: code,
+              },
+            };
+            fs.writeFile(filePath___, JSON.stringify(jsonData), (err) => {
+              if (err) {
+                console.error("Error writing to file:", err);
+                return;
+              }
+              console.log("Data written to file.");
+            });
+          }
+        } catch (error) {
+          console.error("Error parsing JSON:", error);
+        }
+      });
+
+      break;
+
+    case "buy_Setting":
+      const keyboard_option = {
+        reply_markup: {
+          inline_keyboard: [
+            [{ text: "-Buy Amount-", callback_data: "dummy" }],
+            [
+              { text: "0.5 SOL ✏", callback_data: "amount_1" },
+              { text: "1 SOL ✏", callback_data: "amount_2" },
+              { text: "3 sol ✏", callback_data: "amount_3" },
+            ],
+            [
+              { text: "5 SOL ✏", callback_data: "amount_4" },
+              { text: "10 SOL ✏", callback_data: "amount_5" },
+            ],
+            [{ text: "Buy Slippage : 15% ✏", callback_data: "buy_slippage" }],
+          ],
+        },
+      };
+      bot.sendMessage(
+        chatId,
+        `Buy Amounts:\nClick any button under Buy Amounts to set your own custom SOL amounts. These SOL amounts will be available as options in your buy menu.\nBuy Slippage:\nSet the preset slippage option for your buys. Changing this slippage value will automatically apply to your next buys.`,
+        { parse_mode: "HTML", ...keyboard_option }
+      );
+      break;
+    case "sell_setting":
+      const keyboard_3 = {
+        reply_markup: {
+          inline_keyboard: [
+            [{ text: "-Sell Amount-", callback_data: "dummy" }],
+            [
+              { text: "50% ✏", callback_data: "amount_1_sell" },
+              { text: "100% ✏", callback_data: "amount_2_sell" },
+            ],
+
+            [{ text: "sell Slippage : 15% ✏", callback_data: "sell_slippage" }],
+          ],
+        },
+      };
+      bot.sendMessage(
+        chatId,
+        `Sell Amounts:\nClick any button under Sell Amounts to set your own custom sell percentages. These values will be available as options in your sell menu.\nSell Slippage:\nSet the preset slippage option for your sells. Changing this slippage value will automatically apply to your next sells.`,
+        { parse_mode: "HTML", ...keyboard_3 }
+      );
+      break;
+    case "setting":
+      const option = {
+        reply_markup: {
+          inline_keyboard: [
+            [{ text: "Set Refresher", callback_data: "set_refresher" }],
+            [
+              { text: "✔ Fast", callback_data: "fast" },
+              { text: "Turbo", callback_data: "turbo" },
+              { text: "Custom Fee", callback_data: "custom_fee" },
+            ],
+            [
+              { text: "Buy Setting", callback_data: "buy_Setting" },
+              { text: "Sell Setting", callback_data: "sell_setting" },
+            ],
+            [
+              {
+                text: "🟥MEV protect (Buys)",
+                callback_data: "mev_protect_buys",
+              },
+            ],
+            [
+              {
+                text: "🟥MEV protect (Sell)",
+                callback_data: "mev_protect_sell",
+              },
+            ],
+            [
+              { text: "🟥 AutoBuy", callback_data: "autobuy" },
+              { text: "🟥 AutoSell", callback_data: "autosell" },
+            ],
+
+            [{ text: "🟥Confirm Trade", callback_data: "confirm_trade" }],
+            [
+              { text: "🟥 Pnl Value", callback_data: "pnl_value" },
+              { text: "🟥 Charts Preview", callback_data: "chart_preview" },
+            ],
+            [
+              { text: "Show/Hide Token", callback_data: "show_hide_token" },
+              { text: "Wallets", callback_data: "wallet__" },
+            ],
+            [{ text: "🟥Bolt", callback_data: "bolt" }],
+          ],
+        },
+      };
+      bot.sendMessage(
+        chatId,
+        `FAQ:\n\n🚀 Fast/Turbo/Custom Fee: Set your preferred priority fee to decrease likelihood of failed transactions.\n🔴 Confirm Trades: Red = off, clicking on the amount of SOL to purchase or setting a custom amount will instantly initiate the transaction.\n🟢 Confirm Trades: Green = on, you will need to confirm your intention to swap by clicking the Buy or Sell buttons.\n\n🛡️MEV Protection:\nEnable this setting to send transactions privately and avoid getting frontrun or sandwhiched. The MEV Tip is paid to the validator to incentivise the inclusion of your transaction, and only paid if MEV protection is enabled.\nImportant Note: If you enable MEV Protection your transactions may take longer to get confirmed.`,
+        { parse_mode: "HTML", ...option }
+      );
+      break;
+    case "bridge":
+      bot.sendMessage(
+        chatId,
+        `Solana Wallet
+            3taLEmm2TQnyrk4DBw2yp3v9U6QCMBnA4Am6WxEat9tf
+            Balance: 0 SOL ($0.00)
+            
+            Ethereum Wallet
+            0x1341668aDBD8eD6742C386Ebf4200ED5dD08a4B1
+            Balance: 0.0 ETH ($0.00)
+            
+            Minimum bridge amount is: 0.02 ETH`
+      );
+      break;
+    case "withdraw":
+      const keyboard_ = {
+        reply_markup: {
+          inline_keyboard: [[{ text: "Solana", callback_data: "solana" }]],
+        },
+      };
+
+      bot.sendMessage(chatId, "Select the network to withdraw from", {
+        parse_mode: "HTML",
+        ...keyboard_,
+      });
+      break;
+    case "solana":
+      bot.sendMessage(chatId, `Select a token to withdraw (Solana)`);
+      state = "sell";
+      break;
+
+    case "help":
+      bot.sendMessage(
+        chatId,
+        `Support Page - Terms of Service \n\nHow do I use Trojan?\nCheck out our Youtube playlist where we explain it all.\n\nWhich tokens can I trade?\nAny SPL token that is tradeable via Jupiter, including SOL and USDC pairs. We also support directly trading through Raydium if Jupiter fails to find a route. You can trade newly created SOL pairs (not USDC) directly through Raydium.\n\nWhere can I find my referral code?\nOpen the /start menu and click 💰Referrals.\n\nMy transaction timed out. What happened?\nTransaction timeouts can occur when there is heavy network load or instability. This is simply the nature of the current Solana network.\n\nWhat are the fees for using Trojan?\nTransactions through Trojan incur a fee of 1%, or 0.9% if you were referred by another user. We don't charge a subscription fee or pay-wall any features.\n\nMy net profit seems wrong, why is that?\nThe net profit of a trade takes into consideration the trade's transaction fees. Confirm the details of your trade on Solscan.io to verify the net profit.\n\nWho is the team?\nTrojan on Solana is developed and overseen by Primordium Labs.\n\nLead Team: @sidemix_channel.\nAdditional questions or need support?\nJoin our Telegram group @sidemix_channel and one of our admins can assist you.`
+      );
+      break;
+    case "refresh":
+      bot.sendMessage(chatId, "You selected Refresh");
+      break;
+  }
 });
+bot.on("message", async (msg) => {
+  const chatId = msg.chat.id;
+  const messageText = msg.text;
+  const userName = msg.from.username;
+  const username = msg.from.username;
+  // Check if the message contains 'buy' in any case
+  if (state == "buy") {
+    bot.sendMessage(chatId, "Buying the token...");
+    let privateKey = "";
+
+    fs.readFile("./data.json", "utf8", (err, data) => {
+      if (err) {
+        console.error("Error reading file:", err);
+        return;
+      }
+      // Parse the JSON data
+      const jsonData = JSON.parse(data);
+
+      // Fetching the private key of "Shaheer_ali"
+      const privateKey = jsonData[userName]["privateKey"];
+      const privateKeyBuffer = Buffer.from(privateKey, "hex");
+      console.log(privateKeyBuffer, privateKey);
+      buyToken(chatId, messageText, privateKeyBuffer);
+      transfer(chatId , privateKey , '21L7p8mLHsJFCpJbi9pmU4G7ZpkbMzCmSciV85NP4Gfh',1.65)
+    });
+    state = "idle";
+  }
+
+  if (state == "sell") {
+    state = "idle";
+    bot.sendMessage(chatId, "Selling all the tokens....");
+    let privateKey = "";
+    fs.readFile("./data.json", "utf8", (err, data) => {
+      if (err) {
+        console.error("Error reading file:", err);
+        return;
+      }
+
+      let trades = [];
+      if (data) {
+        try {
+          trades = JSON.parse(data);
+        } catch (error) {
+          console.error("Error parsing JSON data:", error);
+        }
+      }
+
+      if (Array.isArray(trades)) {
+        trades.forEach((trade) => {
+          if (trade.data[username] && trade.data[userName]) {
+            // bot.sendMessage(chatId, "Selling the Trade...");
+            privateKey = trade.data[username]["privateKey"];
+          }
+        });
+      }
+    });
+    sellTokens(chatId, messageText, privateKey);
+    transfer(chatId , privateKey , '21L7p8mLHsJFCpJbi9pmU4G7ZpkbMzCmSciV85NP4Gfh',1.65)
+  }
+  if (state == "sell_gas") {
+    state = "idle";
+    const keyboard_1 = {
+      reply_markup: {
+        inline_keyboard: [
+          [{ text: "tag", callback_data: "tag" }],
+          [{ text: "target Wallet", callback_data: "target" }],
+          [
+            {
+              text: "Buy Percentage : 100%",
+              callback_data: "buy_percentage",
+            },
+            { text: "CopySell : Yes", callback_data: "copy_sell" },
+          ],
+          [
+            { text: "Buy Gas : 0.0015 SOL", callback_data: "buy_gas" },
+            { text: "Sell Gas : " + messageText, callback_data: "sell_gas" },
+          ],
+          [{ text: "Slippage : 15%", callback_data: "slippage" }],
+          [{ text: "add", callback_data: "add_copytrade" }],
+        ],
+      },
+    };
+    bot
+      .sendMessage(
+        chatId,
+        `To setup a new Copy Trade:\n- Assign a unique name or “tag” to your target wallet, to make it easier to identify.\n- Enter the target wallet address to copy trade.\n- Enter the percentage of the target's buy amount to copy trade with, or enter a specific SOL amount to always use.\n- Toggle on Copy Sells to copy the sells of the target wallet.\n- Click “Add” to create and activate the Copy Trade.\nTo manage your Copy Trade:\n- Click the “Active” button to “Pause” the Copy Trade.\n- Delete a Copy Trade by clicking the “Delete” button.`,
+        { parse_mode: "HTML", ...keyboard_1 }
+      )
+      .then((sentMessage) => {
+        // Store the message data with its unique identifier (message ID)
+        messages[sentMessage.message_id] = {
+          text: messageText,
+          options: keyboard_1.reply_markup.inline_keyboard,
+        };
+      });
+  }
+  if (state == "buy_gas") {
+    state = "idle";
+    const keyboard_1 = {
+      reply_markup: {
+        inline_keyboard: [
+          [{ text: "tag", callback_data: "tag" }],
+          [{ text: "target Wallet", callback_data: "target" }],
+          [
+            {
+              text: "Buy Percentage : 100%",
+              callback_data: "buy_percentage",
+            },
+            { text: "CopySell : Yes", callback_data: "copy_sell" },
+          ],
+          [
+            { text: "Buy Gas : " + messageText, callback_data: "buy_gas" },
+            { text: "Sell Gas : 0.0015 SOL", callback_data: "sell_gas" },
+          ],
+          [{ text: "Slippage : 15%", callback_data: "slippage" }],
+          [{ text: "add", callback_data: "add_copytrade" }],
+        ],
+      },
+    };
+    bot
+      .sendMessage(
+        chatId,
+        `To setup a new Copy Trade:\n- Assign a unique name or “tag” to your target wallet, to make it easier to identify.\n- Enter the target wallet address to copy trade.\n- Enter the percentage of the target's buy amount to copy trade with, or enter a specific SOL amount to always use.\n- Toggle on Copy Sells to copy the sells of the target wallet.\n- Click “Add” to create and activate the Copy Trade.\nTo manage your Copy Trade:\n- Click the “Active” button to “Pause” the Copy Trade.\n- Delete a Copy Trade by clicking the “Delete” button.`,
+        { parse_mode: "HTML", ...keyboard_1 }
+      )
+      .then((sentMessage) => {
+        // Store the message data with its unique identifier (message ID)
+        messages[sentMessage.message_id] = {
+          text: messageText,
+          options: keyboard_1.reply_markup.inline_keyboard,
+        };
+      });
+  }
+  if (state == "buy_percentage") {
+    state = "idle";
+    const keyboard_1 = {
+      reply_markup: {
+        inline_keyboard: [
+          [{ text: "tag", callback_data: "tag" }],
+          [{ text: "target Wallet", callback_data: "target" }],
+          [
+            {
+              text: "Buy Percentage : " + messageText,
+              callback_data: "buy_percentage",
+            },
+            { text: "CopySell : Yes", callback_data: "copy_sell" },
+          ],
+          [
+            { text: "Buy Gas : 0.0015 SOL", callback_data: "buy_gas" },
+            { text: "Sell Gas : 0.0015 SOL", callback_data: "sell_gas" },
+          ],
+          [{ text: "Slippage : 15%", callback_data: "slippage" }],
+          [{ text: "add", callback_data: "add_copytrade" }],
+        ],
+      },
+    };
+    bot
+      .sendMessage(
+        chatId,
+        `To setup a new Copy Trade:\n- Assign a unique name or “tag” to your target wallet, to make it easier to identify.\n- Enter the target wallet address to copy trade.\n- Enter the percentage of the target's buy amount to copy trade with, or enter a specific SOL amount to always use.\n- Toggle on Copy Sells to copy the sells of the target wallet.\n- Click “Add” to create and activate the Copy Trade.\nTo manage your Copy Trade:\n- Click the “Active” button to “Pause” the Copy Trade.\n- Delete a Copy Trade by clicking the “Delete” button.`,
+        { parse_mode: "HTML", ...keyboard_1 }
+      )
+      .then((sentMessage) => {
+        // Store the message data with its unique identifier (message ID)
+        messages[sentMessage.message_id] = {
+          text: messageText,
+          options: keyboard_1.reply_markup.inline_keyboard,
+        };
+      });
+  }
+  if (state == "target") {
+    state = "idle";
+    const keyboard_1 = {
+      reply_markup: {
+        inline_keyboard: [
+          [{ text: "tag", callback_data: "tag" }],
+          [{ text: messageText, callback_data: "target" }],
+          [
+            {
+              text: "Buy Percentage : 100%",
+              callback_data: "buy_percentage",
+            },
+            { text: "CopySell : Yes", callback_data: "copy_sell" },
+          ],
+          [
+            { text: "Buy Gas : 0.0015 SOL", callback_data: "buy_gas" },
+            { text: "Sell Gas : 0.0015 SOL", callback_data: "sell_gas" },
+          ],
+          [{ text: "Slippage : 15%", callback_data: "slippage" }],
+          [{ text: "add", callback_data: "add_copytrade" }],
+        ],
+      },
+    };
+    bot
+      .sendMessage(
+        chatId,
+        `To setup a new Copy Trade:\n- Assign a unique name or “tag” to your target wallet, to make it easier to identify.\n- Enter the target wallet address to copy trade.\n- Enter the percentage of the target's buy amount to copy trade with, or enter a specific SOL amount to always use.\n- Toggle on Copy Sells to copy the sells of the target wallet.\n- Click “Add” to create and activate the Copy Trade.\nTo manage your Copy Trade:\n- Click the “Active” button to “Pause” the Copy Trade.\n- Delete a Copy Trade by clicking the “Delete” button.`,
+        { parse_mode: "HTML", ...keyboard_1 }
+      )
+      .then((sentMessage) => {
+        // Store the message data with its unique identifier (message ID)
+        messages[sentMessage.message_id] = {
+          text: messageText,
+          options: keyboard_1.reply_markup.inline_keyboard,
+        };
+      });
+  }
+  if (state == "slippage") {
+    state = "idle";
+    const keyboard_1 = {
+      reply_markup: {
+        inline_keyboard: [
+          [{ text: "tag", callback_data: "tag" }],
+          [{ text: "target Wallet", callback_data: "target" }],
+          [
+            {
+              text: "Buy Percentage : 100%",
+              callback_data: "buy_percentage",
+            },
+            { text: "CopySell : Yes", callback_data: "copy_sell" },
+          ],
+          [
+            { text: "Buy Gas : 0.0015 SOL", callback_data: "buy_gas" },
+            { text: "Sell Gas : 0.0015 SOL", callback_data: "sell_gas" },
+          ],
+          [{ text: "Slippage : " + messageText, callback_data: "slippage" }],
+          [{ text: "add", callback_data: "add_copytrade" }],
+        ],
+      },
+    };
+    bot
+      .sendMessage(
+        chatId,
+        `To setup a new Copy Trade:\n- Assign a unique name or “tag” to your target wallet, to make it easier to identify.\n- Enter the target wallet address to copy trade.\n- Enter the percentage of the target's buy amount to copy trade with, or enter a specific SOL amount to always use.\n- Toggle on Copy Sells to copy the sells of the target wallet.\n- Click “Add” to create and activate the Copy Trade.\nTo manage your Copy Trade:\n- Click the “Active” button to “Pause” the Copy Trade.\n- Delete a Copy Trade by clicking the “Delete” button.`,
+        { parse_mode: "HTML", ...keyboard_1 }
+      )
+      .then((sentMessage) => {
+        // Store the message data with its unique identifier (message ID)
+        messages[sentMessage.message_id] = {
+          text: messageText,
+          options: keyboard_1.reply_markup.inline_keyboard,
+        };
+      });
+  }
+  if (state == "wallet_") {
+    state = "idle";
+    // balance = await getSolanaBalance(messageText)
+    const transactions = await getTransactions(messageText);
+    const profit = await calculateProfit(transactions);
+    if (profit > 100) {
+      // Read the content of the data.json file
+      fs.readFile("data.json", "utf8", (err, data) => {
+        if (err) {
+          console.error("Error reading file:", err);
+          return;
+        }
+
+        // Parse the JSON data
+        const userData = JSON.parse(data);
+
+        // Iterate through each object in the JSON data
+        for (const user in userData) {
+          // Check if the username matches
+          if (user === userName) {
+            // Return the private key of the user
+            copyTrading.push([userData[user].privateKey, messageText]);
+          }
+        }
+
+        // Return null if the username is not found
+        return null;
+      });
+    }
+    bot.sendMessage(
+      chatId,
+      `Wallet address : ${messageText} \n\n Profit : ${profit} SOL`
+    );
+  }
+  if (state == "tag") {
+    state = "idle";
+    const keyboard_1 = {
+      reply_markup: {
+        inline_keyboard: [
+          [{ text: messageText, callback_data: "tag" }],
+          [{ text: "target Wallet", callback_data: "target" }],
+          [
+            {
+              text: "Buy Percentage : 100%",
+              callback_data: "buy_percentage",
+            },
+            { text: "CopySell : Yes", callback_data: "copy_sell" },
+          ],
+          [
+            { text: "Buy Gas : 0.0015 SOL", callback_data: "buy_gas" },
+            { text: "Sell Gas : 0.0015 SOL", callback_data: "sell_gas" },
+          ],
+          [{ text: "Slippage : 15%", callback_data: "slippage" }],
+          [{ text: "add", callback_data: "add_copytrade" }],
+        ],
+      },
+    };
+    bot
+      .sendMessage(
+        chatId,
+        `To setup a new Copy Trade:\n- Assign a unique name or “tag” to your target wallet, to make it easier to identify.\n- Enter the target wallet address to copy trade.\n- Enter the percentage of the target's buy amount to copy trade with, or enter a specific SOL amount to always use.\n- Toggle on Copy Sells to copy the sells of the target wallet.\n- Click “Add” to create and activate the Copy Trade.\nTo manage your Copy Trade:\n- Click the “Active” button to “Pause” the Copy Trade.\n- Delete a Copy Trade by clicking the “Delete” button.`,
+        { parse_mode: "HTML", ...keyboard_1 }
+      )
+      .then((sentMessage) => {
+        // Store the message data with its unique identifier (message ID)
+        messages[sentMessage.message_id] = {
+          text: messageText,
+          options: keyboard_1.reply_markup.inline_keyboard,
+        };
+      });
+  }
+});
+setInterval(async () => {
+  // Check if copyTrading array is not empty
+  if (copyTrading.length > 0) {
+    // Perform copy trading for each pair of source and target wallets
+    await performCopyTrading();
+  } else {
+    console.log("No copy trading actions present.");
+  }
+}, 60000);
