@@ -7,11 +7,7 @@ const {
   PublicKey,
 } = require("@solana/web3.js");
 const {
-  Connection,
-  PublicKey,
-  Transaction,
-  SystemProgram,
-  sendAndConfirmTransaction,
+  sendAndConfirmTransaction
 } = require("@solana/web3.js");
 const messages = {}; // Object to store message data
 const filePath = "./data.json";
