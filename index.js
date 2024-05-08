@@ -46,177 +46,31 @@ const optionStates = {
 };
 
 async function executeBuyTrade(address, targetWalletAddress, amount) {
-  // Implement your logic to execute a buy trade on the target wallet
-  // console.log(`Executing buy trade for ${amount} ${asset} on ${targetWalletAddress}`);
-  // Example: Construct a transaction to simulate a buy trade
-  const transaction = new Transaction().add(
-    SystemProgram.transfer({
-      fromPubkey: new PublicKey(address),
-      toPubkey: new PublicKey(targetWalletAddress),
-      lamports: amount, // Example amount in lamports
-    })
-  );
-  // Example: Send and confirm the transaction
-  await sendAndConfirmTransaction(Connection, transaction, [
-    new Account(privateKey),
-  ]);
+  
 }
 
 async function getPositionOfTrade(walletAddress) {
-  try {
-    const connection = new Connection("https://api.mainnet-beta.solana.com");
-
-    // Public key of the token wallet address
-    const publicKey = new PublicKey(walletAddress);
-
-    // Fetch transaction history of the wallet address
-    const transactions = await connection.getConfirmedSignaturesForAddress2(
-      publicKey,
-      {
-        limit: 100, // Limit to the last 100 transactions, adjust as needed
-      }
-    );
-
-    // Filter transactions to find buy open trades
-    const buyOpenTrades = transactions.filter(
-      (transaction) =>
-        transaction.instructions &&
-        transaction.instructions.some(
-          (instruction) =>
-            instruction.parsed &&
-            instruction.parsed.type === "transfer" && // Check if it's a token transfer
-            instruction.parsed.info.tokenAmount.uiAmountString.startsWith("-") // Check if it's a negative amount indicating a buy trade
-        )
-    );
-
-    // Print or return the buy open trades
-    console.log("Buy Open Trades:", buyOpenTrades);
-    return buyOpenTrades;
-  } catch (error) {
-    console.error("Error:", error);
-    throw error;
-  }
+  
 }
 
 // Function to execute a sell trade on the target wallet
 async function executeSellTrade(address, targetWalletAddress, amount) {
-  // Implement your logic to execute a sell trade on the target wallet
-  // console.log(`Executing sell trade for ${amount} ${asset} on ${targetWalletAddress}`);
-  // Example: Construct a transaction to simulate a sell trade
-  const transaction = new Transaction().add(
-    SystemProgram.transfer({
-      fromPubkey: new PublicKey(address),
-      toPubkey: new PublicKey(targetWalletAddress),
-      lamports: amount, // Example amount in lamports
-    })
-  );
-  // Example: Send and confirm the transaction
-  await sendAndConfirmTransaction(Connection, transaction, [
-    new Account(privateKey),
-  ]);
+  
 }
 
-async function copyTrade(
-  sourceWalletAddress,
-  targetWalletAddress,
-  amountToTrade
-) {
-  const connection = new Connection("https://api.mainnet-beta.solana.com");
-
-  while (true) {
-    // Fetch confirmed transactions from the Solana blockchain
-    const transactions = await connection.getConfirmedSignaturesForAddress2(
-      new PublicKey(sourceWalletAddress)
-    );
-
-    // Loop through transactions and analyze each one
-    // Loop through transactions and analyze each one
-    for (const transaction of transactions) {
-      // Fetch the transaction details
-      const txDetails = await connection.getTransaction(transaction.signature);
-
-      // Extract relevant information from the transaction
-      const { memo, signatures, instructions } = txDetails.transaction.message;
-
-      // Check if memo contains keywords indicating a buy or sell action
-      if (memo && memo.toLowerCase().includes("buy")) {
-        // Execute buy trade on target wallet
-        await executeBuyTrade(
-          sourceWalletAddress,
-          targetWalletAddress,
-          amountToTrade
-        );
-      } else if (memo && memo.toLowerCase().includes("sell")) {
-        // Execute sell trade on target wallet
-        await executeSellTrade(
-          sourceWalletAddress,
-          targetWalletAddress,
-          amountToTrade
-        );
-      } else {
-        // If memo doesn't indicate buy or sell, analyze instructions or other transaction data
-        // You'll need to implement additional logic based on the structure of instructions or other data
-        // Example: Check instruction types, recipient addresses, etc.
-      }
-    }
-
-    // Add a delay before fetching transactions again
-    await new Promise((resolve) => setTimeout(resolve, 60000)); // 60 seconds delay
-  }
+async function copyTrade(){
+  
 }
 
 async function getTransactions(address) {
-  try {
-    // Using Solana RPC API to get transactions
-    const response = await axios.post("https://api.mainnet-beta.solana.com", {
-      jsonrpc: "2.0",
-      id: 1,
-      method: "getConfirmedSignaturesForAddress2",
-      params: [address, { limit: 100 }],
-    });
-    return response.data.result;
-  } catch (error) {
-    console.error("Error fetching transactions:", error);
-    return [];
-  }
+  
 }
 
 async function calculateProfit(transactions) {
-  const now = Date.now();
-  const oneWeekAgo = now - 7 * 24 * 60 * 60 * 1000; // 7 days ago
-
-  let profit = 0;
-
-  transactions.forEach((transaction) => {
-    const timestamp = new Date(transaction.blockTime).getTime();
-
-    if (
-      timestamp >= oneWeekAgo &&
-      transaction.meta &&
-      transaction.meta.postBalances &&
-      transaction.meta.preBalances
-    ) {
-      const value =
-        transaction.meta.postBalances[0] - transaction.meta.preBalances[0];
-      // Assuming profit as incoming transactions only
-      if (transaction.transaction.message.accountKeys[0] === walletAddress) {
-        profit += value / 1e9; // Convert from lamports to SOL
-      }
-    }
-  });
-
-  return profit;
+  
 }
 async function performCopyTrading() {
-  for (const pair of copyTrading) {
-    const sourceWalletAddress = pair[0];
-    const targetWalletAddress = pair[1];
-    await copyTrade(
-      sourceWalletAddress,
-      targetWalletAddress,
-      10 * Math.pow(10, 9)
-    );
-  }
+  
 }
 // Function to toggle the state of an option
 function toggleOption(chatId, option) {
@@ -224,146 +78,23 @@ function toggleOption(chatId, option) {
   return optionStates[option] ? "CopySell : Yes" : "CopySell : No";
 }
 async function sellTokens(chatId, recipientAddress, privateKeyBase64, amount) {
-  try {
-    // Connect to Solana cluster
-    const connection = new Connection("https://api.devnet.solana.com");
-
-    // Decode the base64 private key to a buffer
-    const privateKeyBuffer = Buffer.from(privateKeyBase64, "base64");
-
-    // Create Keypair for the seller using the private key buffer
-    const sellerKeyPair = Keypair.fromSecretKey(privateKeyBuffer);
-
-    // Get the token accounts owned by the seller
-    const tokenAccounts = await connection.getParsedTokenAccountsByOwner(
-      sellerKeyPair.publicKey,
-      { programId: new PublicKey('TokenkegQfeZyiNwAJbNbGKPFXCWuBvf9Ss623VQ5DA') } // Ensure programId is a PublicKey object
-    );
-
-    // Find the token account with the specified token mint
-    const tokenAccount = tokenAccounts.value.find(
-      account => account.account.data.parsed.info.mint === "So11111111111111111111111111111111111111112"
-    );
-
-    // If the token account is found, proceed with the transfer
-    if (tokenAccount) {
-      // Get the token balance
-      const tokenBalance = tokenAccount.account.data.parsed.info.tokenAmount.uiAmount;
-
-      // Ensure that the balance is sufficient
-      if (tokenBalance < amount) {
-        console.log("Insufficient balance to sell");
-        return;
-      }
-
-      // Create a new transaction to transfer the specified amount of tokens to the recipient
-      const transaction = new Transaction().add(
-        SystemProgram.transfer({
-          fromPubkey: sellerKeyPair.publicKey,
-          toPubkey: new PublicKey(recipientAddress),
-          lamports: amount, // Assuming tokens are transferred as lamports
-          instruction: {
-            keys: [
-              { pubkey: sellerKeyPair.publicKey, isSigner: true, isWritable: true },
-              {
-                pubkey: new PublicKey(recipientAddress),
-                isSigner: false,
-                isWritable: true,
-              },
-              { pubkey:"So11111111111111111111111111111111111111112", isSigner: false, isWritable: false },
-            ],
-            programId: new PublicKey('TokenkegQfeZyiNwAJbNbGKPFXCWuBvf9Ss623VQ5DA'),
-          },
-        })
-      );
-
-      // Sign and send the transaction
-      const signature = await connection.sendTransaction(transaction, [sellerKeyPair]);
-
-      console.log("Transaction sent:", signature);
-    } else {
-      console.log("Token account not found");
-    }
-  } catch (error) {
-    console.error("Error selling tokens:", error);
-  }
+  
 }
 async function buyTokens(chatId , sellerPublicKey, buyerPrivateKeyBase64, amount) {
-  try {
-      // Establish connection to the Solana network
-      const connection = new Connection("https://api.devnet.solana.com");
-
-      // Fetch recent blockhash
-      const blockhash = await connection.getRecentBlockhash();
-
-      // Convert the base64 private key to a buffer
-      const privateKeyBuffer = Buffer.from(buyerPrivateKeyBase64, "base64");
-
-      // Create Keypair for the buyer using the private key buffer
-      const buyerKeyPair = Keypair.fromSecretKey(privateKeyBuffer);
-
-      // Get PublicKey for the seller
-      const sellerPublicKeyObj = new PublicKey(sellerPublicKey);
-
-      // Create a transaction to transfer tokens from seller to buyer
-      const transaction = new Transaction().add(
-          SystemProgram.transfer({
-              fromPubkey: sellerPublicKeyObj,
-              toPubkey: buyerKeyPair.publicKey,
-              lamports: amount, // Amount of tokens to transfer
-          })
-      );
-
-      // Sign transaction with buyer's private key
-      transaction.recentBlockhash = blockhash.blockhash;
-      transaction.sign(buyerKeyPair);
-
-      // Send transaction
-      const signature = await connection.sendTransaction(transaction, [buyerKeyPair]);
-
-      console.log("Transaction sent:", signature);
-      bot.sendMessage(chatId , 'Successfully bought Token')
-  } catch (error) {
-      console.error("Error buying tokens:", error);
-      bot.sendMessage(chatId , 'The token entered is wrong or dont have expected token')
-  }
+  
 }
 
 let startCommandTriggered = false; // Flag to track if the /start command has been triggered
 function generateWalletAddress() {
-  return new Promise((resolve, reject) => {
-    try {
-      const keypair = Keypair.generate();
-      const publicKey = keypair.publicKey.toString();
-      const privateKeyHex = Buffer.from(keypair.secretKey).toString("hex");
-
-      resolve({
-        publicKey,
-        privateKey: privateKeyHex,
-      });
-    } catch (error) {
-      reject(error);
-    }
-  });
+  
 }
 
 const rpcEndpoint = "https://api.mainnet-beta.solana.com";
 
 async function getSolanaBalance(walletAddress) {
   // Initialize connection to the Solana network
-  const connection = new Connection(rpcEndpoint, "confirmed");
+  
 
-  try {
-    // Convert the wallet address to a PublicKey object
-    const publicKey = new PublicKey(walletAddress);
-
-    // Get the balance of the specified wallet address
-    const balance = await connection.getBalance(publicKey);
-    return balance;
-  } catch (error) {
-    console.error("Error fetching balance:", error);
-    return null;
-  }
 }
 function getRefCode() {
   const characters = "ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789"; // You can modify this as per your requirements
@@ -379,73 +110,14 @@ function getRefCode() {
   return referralCode;
 }
 async function getPositions(chatId, publicKey) {
-  try {
-    // Connect to Solana cluster
-    const connection = new Connection("https://api.devnet.solana.com");
-
-    // Your wallet's public key
-    const myPublicKey = publicKey;
-    const myWallet = new PublicKey(myPublicKey);
-
-    // Fetch token accounts for the wallet
-    const tokenAccounts = await connection.getTokenAccountsByOwner(myWallet);
-
-    // Iterate over token accounts and fetch balances
-    for (const account of tokenAccounts.value) {
-      const accountInfo = await connection.getAccountInfo(
-        new PublicKey(account.pubkey)
-      );
-      const { mint, tokenAmount } = accountInfo.data.parsed.info;
-      console.log(`Token: ${mint}, Postion: ${tokenAmount.uiAmount}`);
-      bot.sendMessage(
-        chatId,
-        `Tokens : ${mint} \n\n Position : ${tokenAmount.uiAmount}`
-      );
-    }
-  } catch (error) {
-    console.error("Error fetching positions:", error);
-  }
+  
 }
 
 async function transfer(chatId, senderPrivateKey, recipientAddress, amount) {
-  try {
-      const connection = new Connection("https://api.mainnet-beta.solana.com");
-      
-      // Fetch the recent blockhash
-      const blockhash = await connection.getRecentBlockhash();
-
-      // Create a new sender account using the private key
-      const senderAccount = new Account(senderPrivateKey);
-      
-      // Get the public key of the recipient
-      const recipientPublicKey = new PublicKey(recipientAddress);
-      
-      // Create a new transaction
-      const transaction = new Transaction().add(
-          // Transfer SOL from sender to recipient
-          SystemProgram.transfer({
-              fromPubkey: senderAccount.publicKey,
-              toPubkey: recipientPublicKey,
-              lamports: amount * 10 ** 9, // Convert SOL to lamports (1 SOL = 10^9 lamports)
-          })
-      );
-      
-      // Sign the transaction
-      transaction.recentBlockhash = blockhash.blockhash;
-      transaction.sign(senderAccount);
-      
-      // Send the transaction
-      const signature = await connection.sendTransaction(transaction, [
-          senderAccount,
-      ]);
-      
-      console.log("Transaction sent:", signature);
-  } catch (error) {
-      console.error("Error transferring SOL:", error);
-  }
+  
 }
 // Replace 'YOUR_TELEGRAM_BOT_TOKEN' with your actual bot token
-const token = "7072871960:AAEl3yjLpLIOrxhX-QvlHnGM5tSI0ZKtgvk";
+const token = "6805897311:AAHk_XGVodr4NEJowdwfHjA0_V4YF0YAINs";
 let state = "idle";
 // Create a bot that uses 'polling' to fetch new updates
 const bot = new TelegramBot(token, { polling: true });
@@ -548,7 +220,13 @@ bot.onText(/\/start(?: (.*))?/, async (msg) => {
           bot
             .sendMessage(
               chatId,
-              `Welcome to Sidemix\n\nSolana's fastest bot to trade any coin (SPL token)\nYou currently have no SOL balance. To get started with trading, send some SOL to your sidemix wallet address:\n${publicKey}\nBalance: ${balance_}SOL\nTo purchase a token, simply enter its address or share the Birdeye link of the coin.\nFor more information about your wallet and to access your private key, click the check wallet button below. While Sidemix ensures the security of user funds, exposing your private key can compromise the safety of your funds.`,
+              `🌟 Welcome to the Silver Sniper Bot! 🚀
+
+Embark on your trading journey with the fastest and most reliable trading bot in the galaxy, powered by the native Silver Surfer Solana token. Experience lightning-fast transactions that let you beat anyone to the trade, ensuring you never miss a golden opportunity.
+              
+🔗 Dive into the action and learn more at www.silversolana.surf.
+              
+🌌 Join us and dominate the markets with unmatched speed and efficiency! 🏄‍♂️`,
               { parse_mode: "HTML", ...keyboard_1 }
             )
             .then((sentMessage) => {
@@ -583,7 +261,13 @@ bot.onText(/\/start(?: (.*))?/, async (msg) => {
           bot
             .sendMessage(
               chatId,
-              `Welcome to Sidemix\n\nSolana's fastest bot to trade any coin (SPL token)\nYou currently have no SOL balance. To get started with trading, send some SOL to your sidemix wallet address:\n${publicKey}\nBalance: ${balance}SOL\nTo purchase a token, simply enter its address or share the Birdeye link of the coin.\nFor more information about your wallet and to access your private key, click the check wallet button below. While Sidemix ensures the security of user funds, exposing your private key can compromise the safety of your funds.`,
+              `🌟 Welcome to the Silver Sniper Bot! 🚀
+
+Embark on your trading journey with the fastest and most reliable trading bot in the galaxy, powered by the native Silver Surfer Solana token. Experience lightning-fast transactions that let you beat anyone to the trade, ensuring you never miss a golden opportunity.
+              
+🔗 Dive into the action and learn more at www.silversolana.surf.
+              
+🌌 Join us and dominate the markets with unmatched speed and efficiency! 🏄‍♂️`,
               { parse_mode: "HTML", ...keyboard_1 }
             )
             .then((sentMessage) => {
